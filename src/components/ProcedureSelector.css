@@ -1,0 +1,36 @@
+.procedure-selector-container {
+  margin-bottom: 25px;
+}
+
+.procedure-selector-heading {
+  color: #111111;
+}
+
+.procedure-selector-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.procedure-selector-option-button {
+  padding: 12px 16px;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  color: #111111;
+  cursor: pointer;
+  min-width: 170px;
+}
+
+.procedure-selector-option-button-selected {
+  background-color: #add8e6;
+}
+
+.procedure-selector-option-name {
+  font-weight: 700;
+}
+
+.procedure-selector-option-details {
+  font-size: 12px;
+  margin-top: 4px;
+}

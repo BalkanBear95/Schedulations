@@ -1,0 +1,43 @@
+:root {
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #111111;
+  background-color: #f5f7fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  color: #111111;
+}
+
+#root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1,
+h2,
+h3,
+p,
+label {
+  color: #111111;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
