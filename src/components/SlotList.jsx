@@ -17,6 +17,7 @@ function SlotList({
   onCancelReschedule,
 }) {
   const [openedBooking, setOpenedBooking] = useState(null);
+  const isSlotSelectionActive = Boolean(selectedProcedure);
 
   const appointmentDurationMinutes = selectedProcedureSlots * 5;
   const availableSlotSet = new Set(availableSlots);
@@ -112,8 +113,9 @@ function SlotList({
         <div className="slot-list-heading-group">
           <h3 className="slot-list-heading">Daily scheduler</h3>
           <p className="slot-list-description">
-            {selectedProcedure} uses {selectedProcedureSlots} slots (
-            {appointmentDurationMinutes} min).
+            {selectedProcedure
+              ? `${selectedProcedure} uses ${selectedProcedureSlots} slots (${appointmentDurationMinutes} min).`
+              : "Select a procedure to activate slot selection."}
           </p>
         </div>
 
@@ -143,6 +145,12 @@ function SlotList({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {!selectedProcedure && (
+        <div className="slot-list-empty-state">
+          Select a procedure to activate slot selection.
         </div>
       )}
 
@@ -224,7 +232,8 @@ function SlotList({
                           slotMinutes >= lunchStartMinutes &&
                           slotMinutes < lunchEndMinutes;
                         const isValidStart = availableSlotSet.has(slotData.slot);
-                        const isClickableFree = !isOccupied && isValidStart;
+                        const isClickableFree =
+                          isSlotSelectionActive && !isOccupied && isValidStart;
 
                         let slotClassName = "slot-list-scheduler-cell";
 

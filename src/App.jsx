@@ -5,6 +5,7 @@ import ProcedureSelector from "./components/ProcedureSelector";
 import SlotList from "./components/SlotList";
 import BookingForm from "./components/BookingForm";
 import BookingList from "./components/BookingList";
+import { supabase } from "./lib/supabase";
 
 function App() {
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -107,6 +108,83 @@ function App() {
     )}`;
   };
 
+  const createBookingKey = (year, month, day, slot) => {
+    return `${year}-${month}-${day}-${slot}`;
+  };
+
+  const formatAppointmentDate = (year, month, day) => {
+    return `${String(year).padStart(4, "0")}-${String(month + 1).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(2, "0")}`;
+  };
+
+  const parseAppointmentDate = (appointmentDate) => {
+    if (!appointmentDate) {
+      return null;
+    }
+
+    const [yearString, monthString, dayString] = String(appointmentDate)
+      .split("T")[0]
+      .split("-");
+    const year = Number(yearString);
+    const month = Number(monthString) - 1;
+    const day = Number(dayString);
+
+    if (
+      !Number.isFinite(year) ||
+      !Number.isFinite(month) ||
+      !Number.isFinite(day)
+    ) {
+      return null;
+    }
+
+    return { year, month, day };
+  };
+
+  const mapAppointmentRowToBooking = (appointmentRow) => {
+    const parsedDate = parseAppointmentDate(appointmentRow.appointment_date);
+
+    if (!parsedDate || !appointmentRow.start_time) {
+      return null;
+    }
+
+    const slotsUsed = Number(appointmentRow.procedure_slots ?? 0);
+    const startMinutes = timeToMinutes(appointmentRow.start_time);
+    const endMinutes = appointmentRow.end_time
+      ? timeToMinutes(appointmentRow.end_time)
+      : startMinutes + slotsUsed * 5;
+    const derivedStartSlotIndex = allSlots.indexOf(appointmentRow.start_time);
+    const rawStartSlotIndex = Number(appointmentRow.start_slot_index);
+    const startSlotIndex = Number.isFinite(rawStartSlotIndex)
+      ? rawStartSlotIndex
+      : derivedStartSlotIndex;
+
+    if (startSlotIndex < 0) {
+      return null;
+    }
+
+    return {
+      id: appointmentRow.id,
+      name: appointmentRow.patient_name ?? "",
+      surname: appointmentRow.patient_surname ?? "",
+      phone: appointmentRow.phone ?? "",
+      gender: appointmentRow.gender ?? "",
+      reason: appointmentRow.reason ?? "",
+      anticipation: Boolean(appointmentRow.anticipation_available),
+      poornessAllergy: Boolean(appointmentRow.poorness_allergy),
+      notes: appointmentRow.notes ?? "",
+      procedure: appointmentRow.procedure_name ?? "",
+      slotsUsed,
+      slot: appointmentRow.start_time,
+      startMinutes,
+      endMinutes,
+      startSlotIndex,
+      status: appointmentRow.status ?? "scheduled",
+      ...parsedDate,
+    };
+  };
+
   const getSelectedProcedureData = () => {
     return procedures.find(
       (procedure) => procedure.name === selectedProcedure
@@ -150,6 +228,59 @@ function App() {
   };
 
   const allSlots = generateSlots();
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadAppointments = async () => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select(
+          "id, patient_name, patient_surname, phone, gender, reason, anticipation_available, poorness_allergy, notes, procedure_name, procedure_slots, appointment_date, start_time, end_time, start_slot_index, status, created_at, updated_at"
+        )
+        .eq("status", "scheduled")
+        .order("appointment_date", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load appointments from Supabase.", error);
+        return;
+      }
+
+      const mappedBookings = (data ?? []).reduce((accumulator, appointmentRow) => {
+        const booking = mapAppointmentRowToBooking(appointmentRow);
+
+        if (!booking) {
+          return accumulator;
+        }
+
+        const bookingKey = createBookingKey(
+          booking.year,
+          booking.month,
+          booking.day,
+          booking.slot
+        );
+
+        accumulator[bookingKey] = booking;
+        return accumulator;
+      }, {});
+
+      if (!isActive) {
+        return;
+      }
+
+      setBookings((previousBookings) => ({
+        ...mappedBookings,
+        ...previousBookings,
+      }));
+    };
+
+    loadAppointments();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const canBookingFitAtFreedSlot = (
     candidateBooking,
@@ -291,6 +422,12 @@ function App() {
       return;
     }
 
+    if (selectedProcedure === procedureName) {
+    setSelectedProcedure(null);
+    setSelectedSlot(null);
+    return;
+  }
+
     setSelectedProcedure(procedureName);
     setSelectedSlot(null);
   };
@@ -343,7 +480,7 @@ function App() {
     return true;
   };
 
-  const handleSaveBooking = (formData) => {
+  const handleSaveBooking = async (formData) => {
     const slotsNeeded = getProcedureSlotsCount();
     const startSlotIndex = allSlots.indexOf(selectedSlot);
 
@@ -357,18 +494,55 @@ function App() {
 
     const startMinutes = timeToMinutes(selectedSlot);
     const endMinutes = startMinutes + slotsNeeded * 5;
+    const appointmentDate = formatAppointmentDate(
+      selectedYear,
+      selectedMonth,
+      selectedDay
+    );
+    const normalizedBookingData = {
+      ...formData,
+      anticipation:
+        formData.anticipation ?? formData.availabilityForAnticipation ?? false,
+      poornessAllergy:
+        formData.poornessAllergy ?? formData.allergyToPoorness ?? false,
+      notes: formData.notes ?? "",
+    };
 
-    const bookingKey = `${selectedYear}-${selectedMonth}-${selectedDay}-${selectedSlot}`;
+    const appointmentPayload = {
+      patient_name: normalizedBookingData.name ?? "",
+      patient_surname: normalizedBookingData.surname ?? "",
+      phone: normalizedBookingData.phone ?? "",
+      gender: normalizedBookingData.gender ?? "",
+      reason: normalizedBookingData.reason ?? "",
+      anticipation_available: normalizedBookingData.anticipation,
+      poorness_allergy: normalizedBookingData.poornessAllergy,
+      notes: normalizedBookingData.notes,
+      procedure_name: selectedProcedure,
+      procedure_slots: slotsNeeded,
+      appointment_date: appointmentDate,
+      start_time: selectedSlot,
+      end_time: formatMinutes(endMinutes),
+      start_slot_index: startSlotIndex,
+      status: "scheduled",
+    };
 
-    setBookings((prevBookings) => ({
-      ...prevBookings,
-      [bookingKey]: {
-        ...formData,
-        anticipation:
-          formData.anticipation ?? formData.availabilityForAnticipation ?? false,
-        poornessAllergy:
-          formData.poornessAllergy ?? formData.allergyToPoorness ?? false,
-        notes: formData.notes ?? "",
+    const { data, error } = await supabase
+      .from("appointments")
+      .insert(appointmentPayload)
+      .select(
+        "id, patient_name, patient_surname, phone, gender, reason, anticipation_available, poorness_allergy, notes, procedure_name, procedure_slots, appointment_date, start_time, end_time, start_slot_index, status, created_at, updated_at"
+      )
+      .single();
+
+    if (error) {
+      console.error("Failed to save appointment to Supabase.", error);
+      return;
+    }
+
+    const insertedBooking =
+      mapAppointmentRowToBooking(data) ?? {
+        id: data?.id,
+        ...normalizedBookingData,
         year: selectedYear,
         month: selectedMonth,
         day: selectedDay,
@@ -378,16 +552,48 @@ function App() {
         startSlotIndex,
         startMinutes,
         endMinutes,
+        status: "scheduled",
+      };
+
+    const bookingKey = createBookingKey(
+      insertedBooking.year,
+      insertedBooking.month,
+      insertedBooking.day,
+      insertedBooking.slot
+    );
+
+    setBookings((prevBookings) => ({
+      ...prevBookings,
+      [bookingKey]: {
+        ...insertedBooking,
       },
     }));
 
     setSelectedSlot(null);
   };
 
-  const handleCancelBooking = (bookingKey) => {
+  const handleCancelBooking = async (bookingKey) => {
     const cancelledBooking = bookings[bookingKey];
 
     if (!cancelledBooking) {
+      return;
+    }
+
+    if (!cancelledBooking.id) {
+      console.error(
+        "Failed to cancel appointment in Supabase because the booking id is missing.",
+        cancelledBooking
+      );
+      return;
+    }
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("id", cancelledBooking.id);
+
+    if (error) {
+      console.error("Failed to cancel appointment in Supabase.", error);
       return;
     }
 
@@ -432,7 +638,7 @@ function App() {
     setSelectedSlot(null);
   };
 
-  const handleConfirmReschedule = () => {
+  const handleConfirmReschedule = async () => {
     if (!reschedulingBooking || !selectedSlot) {
       return;
     }
@@ -453,8 +659,41 @@ function App() {
 
     const startMinutes = timeToMinutes(selectedSlot);
     const endMinutes = startMinutes + reschedulingBooking.slotsUsed * 5;
-    const nextBookingKey = `${selectedYear}-${selectedMonth}-${selectedDay}-${selectedSlot}`;
+    const appointmentDate = formatAppointmentDate(
+      selectedYear,
+      selectedMonth,
+      selectedDay
+    );
+    const nextBookingKey = createBookingKey(
+      selectedYear,
+      selectedMonth,
+      selectedDay,
+      selectedSlot
+    );
     const didFreeOriginalSlot = nextBookingKey !== reschedulingBookingKey;
+
+    if (!reschedulingBooking.id) {
+      console.error(
+        "Failed to reschedule appointment in Supabase because the booking id is missing.",
+        reschedulingBooking
+      );
+      return;
+    }
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({
+        appointment_date: appointmentDate,
+        start_time: selectedSlot,
+        end_time: formatMinutes(endMinutes),
+        start_slot_index: startSlotIndex,
+      })
+      .eq("id", reschedulingBooking.id);
+
+    if (error) {
+      console.error("Failed to reschedule appointment in Supabase.", error);
+      return;
+    }
 
     setBookings((prevBookings) => {
       const updatedBookings = { ...prevBookings };
@@ -528,7 +767,12 @@ function App() {
         return prevBookings;
       }
 
-      const nextBookingKey = `${freedBooking.year}-${freedBooking.month}-${freedBooking.day}-${freedBooking.slot}`;
+      const nextBookingKey = createBookingKey(
+        freedBooking.year,
+        freedBooking.month,
+        freedBooking.day,
+        freedBooking.slot
+      );
       const updatedBookings = { ...prevBookings };
 
       delete updatedBookings[candidateBookingKey];
@@ -718,43 +962,28 @@ function App() {
 
           <div className="app-schedule-layout">
             <div className="app-slot-column">
-              {selectedProcedure ? (
-                <>
-                  <SlotList
-                    slots={allSlots}
-                    bookings={bookingsForSelectedDay}
-                    procedures={procedures}
-                    scheduleConfig={scheduleConfig}
-                    availableSlots={availableStartSlots}
-                    selectedSlot={selectedSlot}
-                    onSelectSlot={setSelectedSlot}
-                    selectedProcedure={selectedProcedure}
-                    selectedProcedureSlots={slotsNeededForCurrentMode}
-                    isRescheduleMode={Boolean(reschedulingBooking)}
-                    reschedulingBooking={reschedulingBooking}
-                    onConfirmReschedule={handleConfirmReschedule}
-                    onCancelReschedule={handleCancelReschedule}
-                  />
+              <SlotList
+                slots={allSlots}
+                bookings={bookingsForSelectedDay}
+                procedures={procedures}
+                scheduleConfig={scheduleConfig}
+                availableSlots={availableStartSlots}
+                selectedSlot={selectedSlot}
+                onSelectSlot={setSelectedSlot}
+                selectedProcedure={selectedProcedure}
+                selectedProcedureSlots={slotsNeededForCurrentMode}
+                isRescheduleMode={Boolean(reschedulingBooking)}
+                reschedulingBooking={reschedulingBooking}
+                onConfirmReschedule={handleConfirmReschedule}
+                onCancelReschedule={handleCancelReschedule}
+              />
 
-                  {selectedSlot && !reschedulingBooking && (
-                    <div className="app-booking-form-panel">
-                      <h3 className="app-booking-form-heading">
-                        Booking for {selectedSlot} - {selectedProcedure}
-                      </h3>
-                      <BookingForm onSave={handleSaveBooking} />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="app-slot-empty-state">
-                  <h3 className="app-slot-empty-title">
-                    Choose a procedure to see available start slots
+              {selectedProcedure && selectedSlot && !reschedulingBooking && (
+                <div className="app-booking-form-panel">
+                  <h3 className="app-booking-form-heading">
+                    Booking for {selectedSlot} - {selectedProcedure}
                   </h3>
-                  <p className="app-slot-empty-text">
-                    The left panel shows only valid appointment start times for
-                    the selected procedure, while the right panel keeps today's
-                    bookings visible.
-                  </p>
+                  <BookingForm onSave={handleSaveBooking} />
                 </div>
               )}
             </div>
