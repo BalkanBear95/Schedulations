@@ -95,19 +95,63 @@
   gap: 14px;
 }
 
+.slot-list-manual-conflict-panel {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid #efb1b8;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff1f3 0%, #ffe6e9 100%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .slot-list-reschedule-copy {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+.slot-list-manual-conflict-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #5b0f18;
+}
+
 .slot-list-reschedule-title {
   color: #18486d;
+}
+
+.slot-list-manual-conflict-title {
+  color: #7a1220;
 }
 
 .slot-list-reschedule-text {
   font-size: 13px;
   color: #41627f;
+}
+
+.slot-list-manual-conflict-text {
+  font-size: 13px;
+  color: #8a2230;
+}
+
+.slot-list-manual-conflict-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 13px;
+  color: #7a1220;
+}
+
+.slot-list-manual-conflict-meta span {
+  padding: 6px 10px;
+  border: 1px solid #efc2c8;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.72);
 }
 
 .slot-list-reschedule-actions {
@@ -365,6 +409,29 @@
   background-color: #f28c28;
 }
 
+.slot-list-scheduler-cell.slot-list-scheduler-cell-overlap {
+  position: relative;
+  border-color: rgba(38, 53, 72, 0.72);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0 4px,
+    rgba(24, 37, 52, 0.18) 4px 7px
+  );
+  box-shadow: inset 0 0 0 1px rgba(21, 33, 46, 0.28);
+}
+
+.slot-list-scheduler-cell.slot-list-scheduler-cell-hard-conflict {
+  background-color: #d72638;
+  border-color: #9f1020;
+  box-shadow: inset 0 0 0 1px rgba(255, 245, 246, 0.2),
+    0 0 0 1px rgba(159, 16, 32, 0.28);
+}
+
+.slot-list-scheduler-cell.slot-list-scheduler-cell-hard-conflict:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px rgba(255, 245, 246, 0.22),
+    0 6px 14px rgba(159, 16, 32, 0.24);
+}
+
 .slot-list-booking-overlay {
   position: fixed;
   inset: 0;
@@ -434,6 +501,15 @@
 
   .slot-list-hour-slots {
     gap: 1px;
+  }
+
+  .slot-list-manual-conflict-panel,
+  .slot-list-reschedule-panel {
+    padding: 14px;
+  }
+
+  .slot-list-manual-conflict-meta {
+    gap: 8px;
   }
 
   .slot-list-scheduler-cell {

@@ -15,12 +15,20 @@ function SlotList({
   reschedulingBooking,
   onConfirmReschedule,
   onCancelReschedule,
+  manualConflictResolution,
+  conflictHighlightedSlotIndexes,
+  onConfirmManualConflictResolution,
+  onCancelManualConflictResolution,
+  isSavingManualConflictResolution,
 }) {
   const [openedBooking, setOpenedBooking] = useState(null);
   const isSlotSelectionActive = Boolean(selectedProcedure);
+  const isManualConflictMode = Boolean(manualConflictResolution?.occurrence);
+  const manualConflictOccurrence = manualConflictResolution?.occurrence ?? null;
 
   const appointmentDurationMinutes = selectedProcedureSlots * 5;
   const availableSlotSet = new Set(availableSlots);
+  const conflictHighlightedSlotIndexSet = new Set(conflictHighlightedSlotIndexes);
   const previewStartIndex = slots.indexOf(selectedSlot);
 
   const previewTimes = selectedSlot
@@ -60,6 +68,7 @@ function SlotList({
   }, {});
 
   const occupiedSlotMap = {};
+  const occupiedSlotCountMap = {};
 
   bookings.forEach((booking) => {
     for (
@@ -68,6 +77,7 @@ function SlotList({
       index++
     ) {
       occupiedSlotMap[index] = booking;
+      occupiedSlotCountMap[index] = (occupiedSlotCountMap[index] ?? 0) + 1;
     }
   });
 
@@ -113,7 +123,9 @@ function SlotList({
         <div className="slot-list-heading-group">
           <h3 className="slot-list-heading">Daily scheduler</h3>
           <p className="slot-list-description">
-            {selectedProcedure
+            {isManualConflictMode
+              ? `Resolve the recurring conflict for ${manualConflictOccurrence.procedure} by choosing a free slot on the same day.`
+              : selectedProcedure
               ? `${selectedProcedure} uses ${selectedProcedureSlots} slots (${appointmentDurationMinutes} min).`
               : "Select a procedure to activate slot selection."}
           </p>
@@ -188,6 +200,56 @@ function SlotList({
         </div>
       )}
 
+      {isManualConflictMode && manualConflictOccurrence && (
+        <div className="slot-list-manual-conflict-panel">
+          <div className="slot-list-manual-conflict-copy">
+            <strong className="slot-list-manual-conflict-title">
+              Resolve recurring conflict for {manualConflictOccurrence.name}{" "}
+              {manualConflictOccurrence.surname}
+            </strong>
+
+            <span className="slot-list-manual-conflict-text">
+              Intended slot: {manualConflictOccurrence.dateLabel} at{" "}
+              {manualConflictOccurrence.slot}
+            </span>
+
+            <div className="slot-list-manual-conflict-meta">
+              <span>Procedure: {manualConflictOccurrence.procedure}</span>
+              <span>
+                Duration: {manualConflictOccurrence.slotsUsed * 5} min
+              </span>
+              <span>
+                Overlap: {manualConflictOccurrence.overlapSlots} slot
+                {manualConflictOccurrence.overlapSlots === 1 ? "" : "s"} (
+                {manualConflictOccurrence.overlapMinutes} min)
+              </span>
+            </div>
+          </div>
+
+          <div className="slot-list-reschedule-actions">
+            <button
+              type="button"
+              className="slot-list-action-button slot-list-action-button-primary"
+              onClick={onConfirmManualConflictResolution}
+              disabled={!selectedSlot || isSavingManualConflictResolution}
+            >
+              {isSavingManualConflictResolution
+                ? "Saving..."
+                : "Confirm placement"}
+            </button>
+
+            <button
+              type="button"
+              className="slot-list-action-button slot-list-action-button-secondary"
+              onClick={onCancelManualConflictResolution}
+              disabled={isSavingManualConflictResolution}
+            >
+              Cancel manual resolution
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="slot-list-scheduler-shell">
         {schedulerSections.map((section) => {
           const rowsForSection = schedulerRows.filter(
@@ -220,6 +282,9 @@ function SlotList({
                       {row.rowSlots.map((slotData) => {
                         const booking = occupiedSlotMap[slotData.index];
                         const isOccupied = Boolean(booking);
+                        const bookingCountForSlot =
+                          occupiedSlotCountMap[slotData.index] ?? 0;
+                        const hasSavedOverlap = bookingCountForSlot > 1;
                         const isSelectedStart = selectedSlot === slotData.slot;
                         const slotMinutes = timeToMinutes(slotData.slot);
                         const isPreviewed =
@@ -282,6 +347,15 @@ function SlotList({
 
                         if (isSelectedStart) {
                           slotClassName += " slot-list-scheduler-cell-selected-start";
+                        }
+
+                        if (hasSavedOverlap) {
+                          slotClassName += " slot-list-scheduler-cell-overlap";
+                        }
+
+                        if (conflictHighlightedSlotIndexSet.has(slotData.index)) {
+                          slotClassName +=
+                            " slot-list-scheduler-cell-hard-conflict";
                         }
 
                         if (isOccupied) {

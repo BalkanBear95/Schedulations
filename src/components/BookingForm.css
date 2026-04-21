@@ -1,7 +1,7 @@
 .booking-form-container {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 16px;
   max-width: 560px;
 }
 
@@ -15,16 +15,12 @@
 .booking-form-field-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   margin: 0;
 }
 
 .booking-form-name-row .booking-form-field-group {
   flex: 1 1 240px;
-}
-
-.booking-form-container > .booking-form-field-group + .booking-form-field-group {
-  margin-top: 0;
 }
 
 .booking-form-field-label {
@@ -77,6 +73,22 @@
   margin: 0;
 }
 
+.booking-form-recurrence-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #d8e0e8;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fafcfe 0%, #f3f7fb 100%);
+}
+
+.booking-form-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .booking-form-option-button {
   padding: 9px 16px;
   border: 1px solid #cfd6de;
@@ -99,6 +111,34 @@
   box-shadow: 0 0 0 1px rgba(122, 167, 217, 0.16);
 }
 
+.booking-form-chip-button {
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 1px solid #cfd6de;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #111111;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.booking-form-chip-button:hover {
+  background-color: #f7f9fb;
+}
+
+.booking-form-chip-button-selected {
+  background-color: #e7f1fb;
+  border-color: #7aa7d9;
+  box-shadow: 0 0 0 1px rgba(122, 167, 217, 0.16);
+}
+
+.booking-form-helper-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #51606f;
+}
+
 .booking-form-checkbox-label {
   display: flex;
   align-items: center;
@@ -107,19 +147,8 @@
   margin: 0;
 }
 
-.booking-form-container > .booking-form-field-group + .booking-form-checkbox-label {
-  margin-top: 0;
-}
-
 .booking-form-checkbox-label + .booking-form-checkbox-label {
   margin-top: 0;
-}
-
-.booking-form-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 560px;
 }
 
 .booking-form-save-button {
@@ -133,14 +162,34 @@
   margin-top: 6px;
 }
 
+.booking-form-save-button:disabled,
+.booking-form-option-button:disabled,
+.booking-form-chip-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .booking-form-save-button:hover {
   background-color: #6998cb;
+}
+
+.booking-form-save-button:disabled:hover {
+  background-color: #7aa7d9;
 }
 
 @media (max-width: 640px) {
   .booking-form-name-row {
     flex-direction: column;
     gap: 18px;
+  }
+
+  .booking-form-option-button {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 0;
+  }
+
+  .booking-form-chip-button {
+    flex: 0 0 calc(20% - 8px);
   }
 
   .booking-form-save-button {
