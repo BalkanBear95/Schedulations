@@ -134,10 +134,52 @@
   box-shadow: 0 0 0 2px rgba(61, 111, 159, 0.14);
 }
 
+.booking-panel-summary {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.booking-panel-summary-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.35;
+}
+
+.booking-panel-summary-procedure {
+  font-size: 14px;
+  color: #526171;
+  line-height: 1.4;
+}
+
+.booking-panel-summary-toggle {
+  display: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #5b7a98;
+}
+
 .booking-panel-time-range {
   font-weight: 700;
   color: #111111;
   margin-bottom: 12px;
+}
+
+.booking-panel-summary .booking-panel-time-range {
+  margin-bottom: 0;
+}
+
+.booking-panel-details-wrapper {
+  margin-top: 12px;
 }
 
 .booking-panel-details {
@@ -229,14 +271,105 @@
 
 @media (max-width: 640px) {
   .booking-panel {
-    padding: 18px;
+    padding: 16px;
   }
 
   .booking-panel-header {
     flex-direction: column;
+    gap: 10px;
   }
 
   .booking-panel-suggestions-header {
     flex-direction: column;
+  }
+
+  .booking-panel-title {
+    font-size: 20px;
+  }
+
+  .booking-panel-description {
+    font-size: 14px;
+  }
+
+  .booking-panel-count {
+    align-self: flex-start;
+  }
+
+  .booking-panel-list {
+    gap: 10px;
+  }
+
+  .booking-panel-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .booking-panel-summary {
+    gap: 4px;
+  }
+
+  .booking-panel-summary-name {
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .booking-panel-summary-procedure {
+    font-size: 13px;
+  }
+
+  .booking-panel-summary-toggle {
+    display: inline-flex;
+    margin-top: 2px;
+  }
+
+  .booking-panel-time-range {
+    font-size: 15px;
+  }
+
+  .booking-panel-details-wrapper {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e3e9f0;
+  }
+
+  .booking-panel-details-wrapper-expanded {
+    display: block;
+  }
+
+  .booking-panel-details {
+    gap: 8px;
+  }
+
+  .booking-panel-detail-label {
+    font-size: 11px;
+  }
+
+  .booking-panel-detail-value {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .booking-panel-actions {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .booking-panel-button {
+    flex: 1 1 calc(50% - 4px);
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+}
+
+@media (min-width: 641px) {
+  .booking-panel-summary {
+    cursor: default;
+  }
+
+  .booking-panel-details-wrapper {
+    display: block;
   }
 }

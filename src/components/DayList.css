@@ -217,47 +217,59 @@
 
 @media (max-width: 640px) {
   .day-list {
-    padding: 18px;
+    padding: 16px;
   }
 
   .day-list-months {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
   }
 
   .day-list-month-button {
-    min-height: 84px;
-    padding: 12px 8px 10px;
+    min-height: 76px;
+    padding: 10px 6px 8px;
+    border-radius: 12px;
   }
 
   .day-list-month-emoji {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .day-list-month-name {
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.2;
   }
 
   .day-list-calendar {
-    padding: 8px;
+    width: 100%;
+    padding: 8px 6px 6px;
+    box-sizing: border-box;
   }
 
   .day-list-weekdays,
   .day-list-calendar-grid {
-    grid-template-columns: repeat(7, 42px);
-    gap: 3px;
+    width: 100%;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
   }
 
   .day-list-day-cell,
   .day-list-day-cell-empty {
-    height: 38px;
+    height: 36px;
+    border-radius: 8px;
   }
 
   .day-list-day-number {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .day-list-weekday-cell {
-    font-size: 10px;
+    min-width: 0;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    padding: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
   }
 }

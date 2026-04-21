@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "./BookingList.css";
 
 function BookingList({
@@ -9,6 +10,24 @@ function BookingList({
   onMoveCandidateToFreedSlot,
   onDismissReplacementSuggestions,
 }) {
+  const [expandedBookingKeys, setExpandedBookingKeys] = useState({});
+
+  const toggleBookingExpansion = (bookingKey) => {
+    setExpandedBookingKeys((previousState) => ({
+      ...previousState,
+      [bookingKey]: !previousState[bookingKey],
+    }));
+  };
+
+  const formatTimeDisplay = (timeValue) => {
+    if (!timeValue) {
+      return "";
+    }
+
+    const [hours = "00", minutes = "00"] = String(timeValue).split(":");
+    return `${hours}:${minutes}`;
+  };
+
   return (
     <aside className="booking-panel">
       <div className="booking-panel-header">
@@ -143,6 +162,10 @@ function BookingList({
               2,
               "0"
             )}:${String(booking.endMinutes % 60).padStart(2, "0")}`;
+            const isExpanded = Boolean(expandedBookingKeys[booking.bookingKey]);
+            const displayStartTime = formatTimeDisplay(booking.slot);
+            const displayEndTime = formatTimeDisplay(endTime);
+            const fullName = `${booking.name} ${booking.surname}`.trim();
 
             return (
               <article
@@ -153,99 +176,123 @@ function BookingList({
                     : ""
                 }`}
               >
-                <div className="booking-panel-time-range">
-                  {booking.slot} - {endTime}
-                </div>
+                <button
+                  type="button"
+                  className={`booking-panel-summary ${
+                    isExpanded ? "booking-panel-summary-expanded" : ""
+                  }`}
+                  onClick={() => toggleBookingExpansion(booking.bookingKey)}
+                  aria-expanded={isExpanded}
+                >
+                  <div className="booking-panel-time-range">
+                    {displayStartTime} - {displayEndTime}
+                  </div>
+                  <div className="booking-panel-summary-name">
+                    {fullName || "Unnamed patient"}
+                  </div>
+                  <div className="booking-panel-summary-procedure">
+                    {booking.procedure}
+                  </div>
+                  <span className="booking-panel-summary-toggle">
+                    {isExpanded ? "Hide details" : "Show details"}
+                  </span>
+                </button>
 
-                <div className="booking-panel-details">
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">Name</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.name}
-                    </span>
+                <div
+                  className={`booking-panel-details-wrapper ${
+                    isExpanded ? "booking-panel-details-wrapper-expanded" : ""
+                  }`}
+                >
+                  <div className="booking-panel-details">
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">Name</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.name}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">Surname</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.surname}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">
+                        Phone number
+                      </span>
+                      <span className="booking-panel-detail-value">
+                        {booking.phone ? booking.phone : "No phone number added"}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">Procedure</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.procedure}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">Reason</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.reason}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">Gender</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.gender}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">
+                        Availability for anticipation
+                      </span>
+                      <span className="booking-panel-detail-value">
+                        {booking.anticipation ? "Yes" : "No"}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row">
+                      <span className="booking-panel-detail-label">
+                        Allergy to poorness
+                      </span>
+                      <span className="booking-panel-detail-value">
+                        {booking.poornessAllergy ? "Yes" : "No"}
+                      </span>
+                    </div>
+
+                    <div className="booking-panel-detail-row booking-panel-detail-row-notes">
+                      <span className="booking-panel-detail-label">Notes</span>
+                      <span className="booking-panel-detail-value">
+                        {booking.notes ? booking.notes : "No notes added"}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">Surname</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.surname}
-                    </span>
+                  <div className="booking-panel-actions">
+                    <button
+                      type="button"
+                      className="booking-panel-button booking-panel-button-secondary"
+                      onClick={() => onStartReschedule(booking.bookingKey)}
+                    >
+                      {reschedulingBookingKey === booking.bookingKey
+                        ? "Rescheduling..."
+                        : "Reschedule"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="booking-panel-button booking-panel-button-danger"
+                      onClick={() => onCancelBooking(booking.bookingKey)}
+                    >
+                      Cancel
+                    </button>
                   </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">
-                      Phone number
-                    </span>
-                    <span className="booking-panel-detail-value">
-                      {booking.phone ? booking.phone : "No phone number added"}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">Procedure</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.procedure}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">Reason</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.reason}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">Gender</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.gender}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">
-                      Availability for anticipation
-                    </span>
-                    <span className="booking-panel-detail-value">
-                      {booking.anticipation ? "Yes" : "No"}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row">
-                    <span className="booking-panel-detail-label">
-                      Allergy to poorness
-                    </span>
-                    <span className="booking-panel-detail-value">
-                      {booking.poornessAllergy ? "Yes" : "No"}
-                    </span>
-                  </div>
-
-                  <div className="booking-panel-detail-row booking-panel-detail-row-notes">
-                    <span className="booking-panel-detail-label">Notes</span>
-                    <span className="booking-panel-detail-value">
-                      {booking.notes ? booking.notes : "No notes added"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="booking-panel-actions">
-                  <button
-                    type="button"
-                    className="booking-panel-button booking-panel-button-secondary"
-                    onClick={() => onStartReschedule(booking.bookingKey)}
-                  >
-                    {reschedulingBookingKey === booking.bookingKey
-                      ? "Rescheduling..."
-                      : "Reschedule"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="booking-panel-button booking-panel-button-danger"
-                    onClick={() => onCancelBooking(booking.bookingKey)}
-                  >
-                    Cancel
-                  </button>
                 </div>
               </article>
             );
