@@ -1,9 +1,10 @@
 :root {
+  color-scheme: light;
   font-family: Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #111111;
-  background-color: #f5f7fa;
+  background-color: #f5f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -14,11 +15,16 @@
   box-sizing: border-box;
 }
 
+html {
+  background-color: #f5f7fb;
+  color: #111111;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background-color: #f5f7fb;
   color: #111111;
 }
 
@@ -26,6 +32,8 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
+  background-color: #f5f7fb;
+  color: #111111;
 }
 
 h1,
@@ -40,4 +48,21 @@ button,
 input,
 select {
   font: inherit;
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  html,
+  body,
+  #root {
+    background-color: #f5f7fb;
+    color: #111111;
+  }
+}
+
+@media (max-width: 640px) {
+  #root {
+    padding: 16px;
+  }
 }
