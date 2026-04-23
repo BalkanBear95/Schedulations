@@ -230,6 +230,11 @@
   cursor: pointer;
 }
 
+.booking-panel-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .booking-panel-button-secondary {
   background-color: #e8f0f7;
   border-color: #b8cde0;
@@ -250,6 +255,26 @@
   background-color: #dce9f4;
 }
 
+.booking-panel-button-warning {
+  background-color: #fff4dd;
+  border-color: #edd2a0;
+  color: #8a5b05;
+}
+
+.booking-panel-button-warning:hover {
+  background-color: #ffedc8;
+}
+
+.booking-panel-button-neutral {
+  background-color: #ffffff;
+  border-color: #d5dde7;
+  color: #41505f;
+}
+
+.booking-panel-button-neutral:hover {
+  background-color: #f7f9fc;
+}
+
 .booking-panel-button-danger {
   background-color: #fbe5e5;
   border-color: #e2b3b3;
@@ -267,6 +292,116 @@
   background-color: #ffffff;
   color: #55606c;
   line-height: 1.5;
+}
+
+.booking-panel-stop-confirmation {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #f0d6aa;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffdf8 0%, #fff6e6 100%);
+}
+
+.booking-panel-stop-confirmation-text {
+  margin: 0;
+  color: #5f4a1b;
+  line-height: 1.5;
+}
+
+.booking-panel-stop-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.booking-panel-edit-recurrence {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #d8e0e8;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fafcfe 0%, #f3f7fb 100%);
+}
+
+.booking-panel-edit-recurrence-text {
+  margin: 0;
+  color: #425164;
+  line-height: 1.5;
+}
+
+.booking-panel-edit-recurrence-group {
+  margin-top: 14px;
+}
+
+.booking-panel-edit-option-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.booking-panel-edit-option-button {
+  min-width: 110px;
+  padding: 9px 16px;
+  border: 1px solid #cfd6de;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #111111;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.booking-panel-edit-option-button:hover {
+  background-color: #f7f9fb;
+}
+
+.booking-panel-edit-option-button-selected {
+  background-color: #e7f1fb;
+  border-color: #7aa7d9;
+  box-shadow: 0 0 0 1px rgba(122, 167, 217, 0.16);
+}
+
+.booking-panel-edit-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.booking-panel-edit-chip-button {
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 1px solid #cfd6de;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #111111;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.booking-panel-edit-chip-button:hover {
+  background-color: #f7f9fb;
+}
+
+.booking-panel-edit-chip-button-selected {
+  background-color: #e7f1fb;
+  border-color: #7aa7d9;
+  box-shadow: 0 0 0 1px rgba(122, 167, 217, 0.16);
+}
+
+.booking-panel-edit-recurrence-helper {
+  margin: 8px 0 0;
+  color: #51606f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.booking-panel-edit-option-button:disabled,
+.booking-panel-edit-chip-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {
@@ -361,6 +496,79 @@
     flex: 1 1 calc(50% - 4px);
     min-height: 40px;
     padding: 8px 12px;
+  }
+
+  .booking-panel-edit-option-button {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 0;
+  }
+
+  .booking-panel-edit-chip-button {
+    flex: 0 0 calc(20% - 8px);
+  }
+
+  .booking-panel-edit-recurrence {
+    width: calc(100% + 12px);
+    margin-left: -6px;
+    margin-right: -6px;
+    padding: 18px 14px;
+    border-radius: 16px;
+  }
+
+  .booking-panel-edit-recurrence-text {
+    font-size: 14px;
+  }
+
+  .booking-panel-edit-recurrence-group {
+    margin-top: 16px;
+  }
+
+  .booking-panel-edit-option-grid {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .booking-panel-edit-option-button {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 46px;
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .booking-panel-edit-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .booking-panel-edit-chip-button {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 10px 8px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .booking-panel-edit-recurrence-helper {
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
+  .booking-panel-edit-recurrence .booking-panel-stop-confirmation-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .booking-panel-edit-recurrence .booking-panel-button {
+    width: 100%;
+    flex: 1 1 100%;
+    min-height: 46px;
+    padding: 12px 14px;
+    font-size: 14px;
   }
 }
 

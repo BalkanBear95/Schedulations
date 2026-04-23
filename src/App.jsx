@@ -22,6 +22,18 @@ function App() {
   const [recurringSummary, setRecurringSummary] = useState(null);
   const [isSavingRecurringWarnings, setIsSavingRecurringWarnings] =
     useState(false);
+  const [stoppingRecurrenceBookingKey, setStoppingRecurrenceBookingKey] =
+    useState(null);
+  const [
+    stopRecurrenceConfirmationBookingKey,
+    setStopRecurrenceConfirmationBookingKey,
+  ] = useState(null);
+  const [editFutureRecurrenceState, setEditFutureRecurrenceState] =
+    useState(null);
+  const [
+    applyingEditFutureRecurrenceBookingKey,
+    setApplyingEditFutureRecurrenceBookingKey,
+  ] = useState(null);
   const [manualConflictResolution, setManualConflictResolution] =
     useState(null);
   const [isSavingManualConflictResolution, setIsSavingManualConflictResolution] =
@@ -124,6 +136,37 @@ function App() {
     )}`;
   };
 
+  const normalizeTimeValue = (timeValue) => {
+    if (!timeValue) {
+      return "";
+    }
+
+    const [hours = "00", minutes = "00"] = String(timeValue).split(":");
+    return `${hours}:${minutes}`;
+  };
+
+  const getRecurrenceIntervalValueOptions = (intervalUnit) => {
+    return intervalUnit === "months"
+      ? Array.from({ length: 12 }, (_, index) => index + 1)
+      : Array.from({ length: 6 }, (_, index) => index + 1);
+  };
+
+  const getValidatedRecurrenceIntervalValue = (intervalUnit, intervalValue) => {
+    const availableOptions = getRecurrenceIntervalValueOptions(intervalUnit);
+
+    return availableOptions.includes(intervalValue)
+      ? intervalValue
+      : availableOptions[0];
+  };
+
+  const getValidatedRepeatCount = (repeatCount) => {
+    if (!Number.isFinite(repeatCount)) {
+      return 1;
+    }
+
+    return Math.min(Math.max(repeatCount, 1), 12);
+  };
+
   const createBookingKey = (year, month, day, slot) => {
     return `${year}-${month}-${day}-${slot}`;
   };
@@ -183,6 +226,7 @@ function App() {
     const startSlotIndex = Number.isFinite(rawStartSlotIndex)
       ? rawStartSlotIndex
       : derivedStartSlotIndex;
+    const rawRecurrenceIndex = Number(appointmentRow.recurrence_index);
 
     if (startSlotIndex < 0) {
       return null;
@@ -205,6 +249,14 @@ function App() {
       endMinutes,
       startSlotIndex,
       status: appointmentRow.status ?? "scheduled",
+      isRecurring: Boolean(appointmentRow.is_recurring),
+      recurrenceSeriesId: appointmentRow.recurrence_series_id ?? null,
+      recurrenceIntervalValue:
+        appointmentRow.recurrence_interval_value ?? null,
+      recurrenceIntervalUnit: appointmentRow.recurrence_interval_unit ?? null,
+      recurrenceIndex: Number.isFinite(rawRecurrenceIndex)
+        ? rawRecurrenceIndex
+        : null,
       ...parsedDate,
     };
   };
@@ -233,6 +285,147 @@ function App() {
       0,
       0
     );
+  };
+
+  const isBookingAfterSelectedOccurrence = (candidateBooking, selectedBooking) => {
+    if (!candidateBooking || !selectedBooking) {
+      return false;
+    }
+
+    const candidateDate = formatAppointmentDate(
+      candidateBooking.year,
+      candidateBooking.month,
+      candidateBooking.day
+    );
+    const selectedDate = formatAppointmentDate(
+      selectedBooking.year,
+      selectedBooking.month,
+      selectedBooking.day
+    );
+
+    if (candidateDate !== selectedDate) {
+      return candidateDate > selectedDate;
+    }
+
+    return candidateBooking.startMinutes > selectedBooking.startMinutes;
+  };
+
+  const getFutureScheduledRecurrenceCount = (booking, bookingsMap = bookings) => {
+    if (!booking?.isRecurring || !booking.recurrenceSeriesId) {
+      return 0;
+    }
+
+    return Object.values(bookingsMap).filter((candidateBooking) => {
+      if (
+        !candidateBooking ||
+        candidateBooking.id === booking.id ||
+        candidateBooking.recurrenceSeriesId !== booking.recurrenceSeriesId
+      ) {
+        return null;
+      }
+
+      return isBookingAfterSelectedOccurrence(candidateBooking, booking);
+    }).length;
+  };
+
+  const hasFutureScheduledRecurrence = (booking, bookingsMap = bookings) => {
+    return getFutureScheduledRecurrenceCount(booking, bookingsMap) > 0;
+  };
+
+  const isAppointmentRowAfterSelectedOccurrence = (
+    appointmentRow,
+    selectedBooking
+  ) => {
+    if (!appointmentRow || !selectedBooking) {
+      return false;
+    }
+
+    const parsedDate = parseAppointmentDate(appointmentRow.appointment_date);
+
+    if (!parsedDate || !appointmentRow.start_time) {
+      return false;
+    }
+
+    const appointmentDate = formatAppointmentDate(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day
+    );
+    const selectedAppointmentDate = formatAppointmentDate(
+      selectedBooking.year,
+      selectedBooking.month,
+      selectedBooking.day
+    );
+
+    if (appointmentDate !== selectedAppointmentDate) {
+      return appointmentDate > selectedAppointmentDate;
+    }
+
+    return (
+      normalizeTimeValue(appointmentRow.start_time) >
+      normalizeTimeValue(selectedBooking.slot)
+    );
+  };
+
+  const getBookingsAfterRemovingFutureRecurrence = (
+    bookingsMap,
+    selectedBooking
+  ) => {
+    return Object.fromEntries(
+      Object.entries(bookingsMap).filter(([, booking]) => {
+        if (booking.recurrenceSeriesId !== selectedBooking.recurrenceSeriesId) {
+          return true;
+        }
+
+        return !isBookingAfterSelectedOccurrence(booking, selectedBooking);
+      })
+    );
+  };
+
+  const cancelFutureAppointmentsInSeries = async (selectedBooking) => {
+    if (!selectedBooking?.recurrenceSeriesId) {
+      return {
+        cancelledAppointmentIds: [],
+        error: null,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("id, appointment_date, start_time")
+      .eq("recurrence_series_id", selectedBooking.recurrenceSeriesId)
+      .eq("status", "scheduled");
+
+    if (error) {
+      return {
+        cancelledAppointmentIds: [],
+        error,
+      };
+    }
+
+    const cancelledAppointmentIds = (data ?? [])
+      .filter((appointmentRow) =>
+        isAppointmentRowAfterSelectedOccurrence(appointmentRow, selectedBooking)
+      )
+      .map((appointmentRow) => appointmentRow.id)
+      .filter(Boolean);
+
+    if (cancelledAppointmentIds.length === 0) {
+      return {
+        cancelledAppointmentIds,
+        error: null,
+      };
+    }
+
+    const { error: updateError } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .in("id", cancelledAppointmentIds);
+
+    return {
+      cancelledAppointmentIds,
+      error: updateError ?? null,
+    };
   };
 
   const formatBookingDate = (booking) => {
@@ -416,7 +609,7 @@ function App() {
 
   const allSlots = generateSlots();
   const appointmentSelectFields =
-    "id, patient_name, patient_surname, phone, gender, reason, anticipation_available, poorness_allergy, notes, procedure_name, procedure_slots, appointment_date, start_time, end_time, start_slot_index, status, created_at, updated_at";
+    "id, patient_name, patient_surname, phone, gender, reason, anticipation_available, poorness_allergy, notes, procedure_name, procedure_slots, appointment_date, start_time, end_time, start_slot_index, status, is_recurring, recurrence_series_id, recurrence_interval_value, recurrence_interval_unit, recurrence_index, created_at, updated_at";
 
   useEffect(() => {
     let isActive = true;
@@ -1017,6 +1210,106 @@ function App() {
     };
   };
 
+  const generateFutureRecurringSeries = async ({
+    anchorDate,
+    bookingData,
+    procedureName,
+    procedureSlots,
+    startTime,
+    endTime,
+    startSlotIndex,
+    startMinutes,
+    endMinutes,
+    recurrenceSettings,
+    recurrenceSeriesId,
+    baseBookings,
+  }) => {
+    const baseRecurrenceData = {
+      seriesId: recurrenceSeriesId,
+      intervalValue: recurrenceSettings.intervalValue,
+      intervalUnit: recurrenceSettings.intervalUnit,
+    };
+    const createdBookingsByKey = {};
+    let workingBookings = { ...baseBookings };
+    const autoInsertedOccurrences = [];
+    const warningCandidates = [];
+    const hardConflicts = [];
+    const failedOccurrences = [];
+
+    for (
+      let recurrenceIndex = 1;
+      recurrenceIndex <= recurrenceSettings.repeatCount;
+      recurrenceIndex += 1
+    ) {
+      const offsetValue = recurrenceSettings.intervalValue * recurrenceIndex;
+      const rawTargetDate =
+        recurrenceSettings.intervalUnit === "months"
+          ? addMonthsToDate(anchorDate, offsetValue)
+          : addWeeksToDate(anchorDate, offsetValue);
+      const targetDate = adjustWeekendRecurrenceDate(
+        rawTargetDate,
+        scheduleConfig
+      );
+      const recurringOccurrence = createRecurringOccurrence({
+        targetDate,
+        recurrenceIndex,
+        bookingData,
+        procedureName,
+        procedureSlots,
+        startTime,
+        endTime,
+        startSlotIndex,
+        startMinutes,
+        endMinutes,
+        recurrenceData: baseRecurrenceData,
+      });
+      const classifiedOccurrence = classifyRecurringOccurrence(
+        workingBookings,
+        recurringOccurrence
+      );
+
+      if (classifiedOccurrence.classification === "warning") {
+        warningCandidates.push(classifiedOccurrence);
+        continue;
+      }
+
+      if (classifiedOccurrence.classification === "hard-conflict") {
+        hardConflicts.push(classifiedOccurrence);
+        continue;
+      }
+
+      const {
+        workingBookings: nextWorkingBookings,
+        insertedBookingsByKey,
+        insertedOccurrences,
+        failedOccurrences: currentFailedOccurrences,
+      } = await insertRecurringOccurrences([classifiedOccurrence], workingBookings, 0);
+
+      Object.assign(createdBookingsByKey, insertedBookingsByKey);
+      workingBookings = nextWorkingBookings;
+      autoInsertedOccurrences.push(...insertedOccurrences);
+      failedOccurrences.push(...currentFailedOccurrences);
+    }
+
+    return {
+      createdBookingsByKey,
+      workingBookings,
+      recurringSummary: {
+        seriesId: recurrenceSeriesId,
+        procedure: procedureName,
+        originalOccurrenceLabel: formatOccurrenceLabel(anchorDate, startTime),
+        autoInsertedOccurrences,
+        confirmedWarningInsertions: [],
+        manuallyResolvedOccurrences: [],
+        warningCandidates,
+        dismissedWarningCandidates: [],
+        hardConflicts,
+        failedOccurrences,
+        warningActionStatus: warningCandidates.length > 0 ? "pending" : null,
+      },
+    };
+  };
+
   const handleSaveBooking = async (formData) => {
     if (isSavingBooking) {
       return;
@@ -1052,16 +1345,7 @@ function App() {
     const normalizedBookingData = normalizeBookingFormData(formData);
     const recurrenceSettings = formData.recurrence ?? { enabled: false };
     const isRecurring = Boolean(recurrenceSettings.enabled);
-    const recurrenceSeriesId = isRecurring
-      ? generateRecurrenceSeriesId()
-      : null;
-    const baseRecurrenceData = isRecurring
-      ? {
-          seriesId: recurrenceSeriesId,
-          intervalValue: recurrenceSettings.intervalValue,
-          intervalUnit: recurrenceSettings.intervalUnit,
-        }
-      : null;
+    const recurrenceSeriesId = isRecurring ? generateRecurrenceSeriesId() : null;
     const appointmentPayload = buildAppointmentPayload({
       bookingData: normalizedBookingData,
       appointmentDate,
@@ -1072,7 +1356,9 @@ function App() {
       startSlotIndex,
       recurrenceData: isRecurring
         ? {
-            ...baseRecurrenceData,
+            seriesId: recurrenceSeriesId,
+            intervalValue: recurrenceSettings.intervalValue,
+            intervalUnit: recurrenceSettings.intervalUnit,
             index: 0,
           }
         : null,
@@ -1146,91 +1432,30 @@ function App() {
         return;
       }
 
-      const autoInsertedOccurrences = [];
-      const warningCandidates = [];
-      const hardConflicts = [];
-      const failedOccurrences = [];
-
-      for (
-        let recurrenceIndex = 1;
-        recurrenceIndex <= recurrenceSettings.repeatCount;
-        recurrenceIndex += 1
-      ) {
-        const offsetValue =
-          recurrenceSettings.intervalValue * recurrenceIndex;
-        const rawTargetDate =
-          recurrenceSettings.intervalUnit === "months"
-            ? addMonthsToDate(startDate, offsetValue)
-            : addWeeksToDate(startDate, offsetValue);
-        const targetDate = adjustWeekendRecurrenceDate(
-          rawTargetDate,
-          scheduleConfig
-        );
-        const targetYear = targetDate.getFullYear();
-        const targetMonth = targetDate.getMonth();
-        const targetDay = targetDate.getDate();
-        const recurringOccurrence = createRecurringOccurrence({
-          targetDate,
-          recurrenceIndex,
-          bookingData: normalizedBookingData,
-          procedureName: selectedProcedure,
-          procedureSlots: slotsNeeded,
-          startTime: selectedSlot,
-          endTime: formatMinutes(endMinutes),
-          startSlotIndex,
-          startMinutes,
-          endMinutes,
-          recurrenceData: baseRecurrenceData,
-        });
-        const classifiedOccurrence = classifyRecurringOccurrence(
-          workingBookings,
-          recurringOccurrence
-        );
-
-        if (classifiedOccurrence.classification === "warning") {
-          warningCandidates.push(classifiedOccurrence);
-          continue;
-        }
-
-        if (classifiedOccurrence.classification === "hard-conflict") {
-          hardConflicts.push(classifiedOccurrence);
-          continue;
-        }
-
-        const {
-          workingBookings: nextWorkingBookings,
-          insertedBookingsByKey,
-          insertedOccurrences,
-          failedOccurrences: currentFailedOccurrences,
-        } = await insertRecurringOccurrences(
-          [classifiedOccurrence],
-          workingBookings,
-          0
-        );
-
-        Object.assign(createdBookingsByKey, insertedBookingsByKey);
-        workingBookings = nextWorkingBookings;
-        autoInsertedOccurrences.push(...insertedOccurrences);
-        failedOccurrences.push(...currentFailedOccurrences);
-      }
+      const {
+        createdBookingsByKey: createdFutureBookingsByKey,
+        recurringSummary: nextRecurringSummary,
+      } = await generateFutureRecurringSeries({
+        anchorDate: startDate,
+        bookingData: normalizedBookingData,
+        procedureName: selectedProcedure,
+        procedureSlots: slotsNeeded,
+        startTime: selectedSlot,
+        endTime: formatMinutes(endMinutes),
+        startSlotIndex,
+        startMinutes,
+        endMinutes,
+        recurrenceSettings,
+        recurrenceSeriesId,
+        baseBookings: workingBookings,
+      });
 
       setBookings((prevBookings) => ({
         ...prevBookings,
         ...createdBookingsByKey,
+        ...createdFutureBookingsByKey,
       }));
-      setRecurringSummary({
-        seriesId: recurrenceSeriesId,
-        procedure: selectedProcedure,
-        originalOccurrenceLabel: formatOccurrenceLabel(startDate, selectedSlot),
-        autoInsertedOccurrences,
-        confirmedWarningInsertions: [],
-        manuallyResolvedOccurrences: [],
-        warningCandidates,
-        dismissedWarningCandidates: [],
-        hardConflicts,
-        failedOccurrences,
-        warningActionStatus: warningCandidates.length > 0 ? "pending" : null,
-      });
+      setRecurringSummary(nextRecurringSummary);
       setSelectedSlot(null);
     } finally {
       setIsSavingBooking(false);
@@ -1481,6 +1706,233 @@ function App() {
     }
   };
 
+  const handleOpenStopRecurrenceConfirmation = (bookingKey) => {
+    const selectedBooking = bookings[bookingKey];
+
+    if (!selectedBooking || !hasFutureScheduledRecurrence(selectedBooking)) {
+      return;
+    }
+
+    setEditFutureRecurrenceState(null);
+    setStopRecurrenceConfirmationBookingKey(bookingKey);
+  };
+
+  const handleCancelStopRecurrence = () => {
+    if (stoppingRecurrenceBookingKey) {
+      return;
+    }
+
+    setStopRecurrenceConfirmationBookingKey(null);
+  };
+
+  const handleStopRecurrence = async (bookingKey) => {
+    const selectedBooking = bookings[bookingKey];
+
+    if (
+      !selectedBooking ||
+      !selectedBooking.isRecurring ||
+      !selectedBooking.recurrenceSeriesId ||
+      !hasFutureScheduledRecurrence(selectedBooking)
+    ) {
+      return;
+    }
+
+    setStopRecurrenceConfirmationBookingKey(null);
+    setStoppingRecurrenceBookingKey(bookingKey);
+
+    try {
+      const { error } = await cancelFutureAppointmentsInSeries(selectedBooking);
+
+      if (error) {
+        console.error("Failed to stop recurring appointments in Supabase.", error);
+        return;
+      }
+
+      setBookings((prevBookings) =>
+        getBookingsAfterRemovingFutureRecurrence(prevBookings, selectedBooking)
+      );
+
+      const rescheduledBooking = bookings[reschedulingBookingKey];
+
+      if (
+        rescheduledBooking &&
+        rescheduledBooking.recurrenceSeriesId === selectedBooking.recurrenceSeriesId &&
+        isBookingAfterSelectedOccurrence(rescheduledBooking, selectedBooking)
+      ) {
+        setReschedulingBookingKey(null);
+        setSelectedSlot(null);
+      }
+    } finally {
+      setStoppingRecurrenceBookingKey(null);
+      setStopRecurrenceConfirmationBookingKey(null);
+    }
+  };
+
+  const handleStartEditFutureRecurrence = (bookingKey) => {
+    const selectedBooking = bookings[bookingKey];
+
+    if (!selectedBooking?.isRecurring || !selectedBooking.recurrenceSeriesId) {
+      return;
+    }
+
+    const intervalUnit =
+      selectedBooking.recurrenceIntervalUnit === "months" ? "months" : "weeks";
+    const intervalValue = getValidatedRecurrenceIntervalValue(
+      intervalUnit,
+      Number(selectedBooking.recurrenceIntervalValue)
+    );
+    const repeatCount = getValidatedRepeatCount(
+      getFutureScheduledRecurrenceCount(selectedBooking) || 1
+    );
+
+    clearManualConflictResolution();
+    setReschedulingBookingKey(null);
+    setSelectedSlot(null);
+    setStopRecurrenceConfirmationBookingKey(null);
+    setEditFutureRecurrenceState({
+      bookingKey,
+      intervalUnit,
+      intervalValue,
+      repeatCount,
+    });
+  };
+
+  const handleCancelEditFutureRecurrence = () => {
+    if (applyingEditFutureRecurrenceBookingKey) {
+      return;
+    }
+
+    setEditFutureRecurrenceState(null);
+  };
+
+  const handleSelectEditFutureRecurrenceUnit = (intervalUnit) => {
+    setEditFutureRecurrenceState((previousState) => {
+      if (!previousState) {
+        return previousState;
+      }
+
+      return {
+        ...previousState,
+        intervalUnit,
+        intervalValue: getValidatedRecurrenceIntervalValue(
+          intervalUnit,
+          previousState.intervalValue
+        ),
+      };
+    });
+  };
+
+  const handleSelectEditFutureRecurrenceValue = (intervalValue) => {
+    setEditFutureRecurrenceState((previousState) => {
+      if (!previousState) {
+        return previousState;
+      }
+
+      return {
+        ...previousState,
+        intervalValue,
+      };
+    });
+  };
+
+  const handleSelectEditFutureRecurrenceRepeatCount = (repeatCount) => {
+    setEditFutureRecurrenceState((previousState) => {
+      if (!previousState) {
+        return previousState;
+      }
+
+      return {
+        ...previousState,
+        repeatCount,
+      };
+    });
+  };
+
+  const handleApplyEditFutureRecurrence = async (bookingKey) => {
+    const selectedBooking = bookings[bookingKey];
+
+    if (
+      !selectedBooking?.isRecurring ||
+      !selectedBooking.recurrenceSeriesId ||
+      !editFutureRecurrenceState ||
+      editFutureRecurrenceState.bookingKey !== bookingKey ||
+      applyingEditFutureRecurrenceBookingKey
+    ) {
+      return;
+    }
+
+    const recurrenceSettings = {
+      intervalUnit: editFutureRecurrenceState.intervalUnit,
+      intervalValue: editFutureRecurrenceState.intervalValue,
+      repeatCount: editFutureRecurrenceState.repeatCount,
+    };
+    const anchorDate = getBookingDateTime(selectedBooking);
+    const startTime = normalizeTimeValue(selectedBooking.slot);
+    const updatedBookingsAfterCancellation = getBookingsAfterRemovingFutureRecurrence(
+      bookings,
+      selectedBooking
+    );
+
+    setApplyingEditFutureRecurrenceBookingKey(bookingKey);
+    setBookingSaveFeedback(null);
+    setRecurringSummary(null);
+
+    try {
+      const { error } = await cancelFutureAppointmentsInSeries(selectedBooking);
+
+      if (error) {
+        console.error(
+          "Failed to cancel future recurring appointments before editing recurrence.",
+          error
+        );
+        return;
+      }
+
+      const nextRecurrenceSeriesId = generateRecurrenceSeriesId();
+      const {
+        createdBookingsByKey,
+        recurringSummary: nextRecurringSummary,
+      } = await generateFutureRecurringSeries({
+        anchorDate,
+        bookingData: {
+          name: selectedBooking.name,
+          surname: selectedBooking.surname,
+          phone: selectedBooking.phone,
+          gender: selectedBooking.gender,
+          reason: selectedBooking.reason,
+          anticipation: selectedBooking.anticipation,
+          poornessAllergy: selectedBooking.poornessAllergy,
+          notes: selectedBooking.notes,
+        },
+        procedureName: selectedBooking.procedure,
+        procedureSlots: selectedBooking.slotsUsed,
+        startTime,
+        endTime: formatMinutes(selectedBooking.endMinutes),
+        startSlotIndex: selectedBooking.startSlotIndex,
+        startMinutes: selectedBooking.startMinutes,
+        endMinutes: selectedBooking.endMinutes,
+        recurrenceSettings,
+        recurrenceSeriesId: nextRecurrenceSeriesId,
+        baseBookings: updatedBookingsAfterCancellation,
+      });
+
+      setBookings({
+        ...updatedBookingsAfterCancellation,
+        ...createdBookingsByKey,
+      });
+      setRecurringSummary(nextRecurringSummary);
+      setEditFutureRecurrenceState(null);
+      setStopRecurrenceConfirmationBookingKey(null);
+
+      if (!updatedBookingsAfterCancellation[reschedulingBookingKey]) {
+        setReschedulingBookingKey(null);
+        setSelectedSlot(null);
+      }
+    } finally {
+      setApplyingEditFutureRecurrenceBookingKey(null);
+    }
+  };
+
   const handleStartReschedule = (bookingKey) => {
     const bookingToReschedule = bookings[bookingKey];
 
@@ -1721,9 +2173,12 @@ function App() {
       )
     : [];
 
-  const dayBookings = [...bookingsForSelectedDay].sort(
-    (a, b) => a.startMinutes - b.startMinutes
-  );
+  const dayBookings = [...bookingsForSelectedDay]
+    .map((booking) => ({
+      ...booking,
+      hasFutureScheduledRecurrence: hasFutureScheduledRecurrence(booking),
+    }))
+    .sort((a, b) => a.startMinutes - b.startMinutes);
   const replacementCandidates = getReplacementCandidates();
   const replacementSuggestionData = replacementOpportunity
     ? {
@@ -2516,8 +2971,33 @@ function App() {
             <BookingList
               bookings={dayBookings}
               onCancelBooking={handleCancelBooking}
+              onStartEditFutureRecurrence={handleStartEditFutureRecurrence}
+              onCancelEditFutureRecurrence={handleCancelEditFutureRecurrence}
+              onApplyEditFutureRecurrence={handleApplyEditFutureRecurrence}
+              onSelectEditFutureRecurrenceUnit={
+                handleSelectEditFutureRecurrenceUnit
+              }
+              onSelectEditFutureRecurrenceValue={
+                handleSelectEditFutureRecurrenceValue
+              }
+              onSelectEditFutureRecurrenceRepeatCount={
+                handleSelectEditFutureRecurrenceRepeatCount
+              }
+              onOpenStopRecurrenceConfirmation={
+                handleOpenStopRecurrenceConfirmation
+              }
+              onCancelStopRecurrence={handleCancelStopRecurrence}
+              onConfirmStopRecurrence={handleStopRecurrence}
               onStartReschedule={handleStartReschedule}
               reschedulingBookingKey={reschedulingBookingKey}
+              stoppingRecurrenceBookingKey={stoppingRecurrenceBookingKey}
+              applyingEditFutureRecurrenceBookingKey={
+                applyingEditFutureRecurrenceBookingKey
+              }
+              editFutureRecurrenceState={editFutureRecurrenceState}
+              stopRecurrenceConfirmationBookingKey={
+                stopRecurrenceConfirmationBookingKey
+              }
               replacementSuggestionData={replacementSuggestionData}
               onMoveCandidateToFreedSlot={handleMoveCandidateToFreedSlot}
               onDismissReplacementSuggestions={

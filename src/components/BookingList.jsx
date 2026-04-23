@@ -4,12 +4,30 @@ import "./BookingList.css";
 function BookingList({
   bookings,
   onCancelBooking,
+  onStartEditFutureRecurrence,
+  onCancelEditFutureRecurrence,
+  onApplyEditFutureRecurrence,
+  onSelectEditFutureRecurrenceUnit,
+  onSelectEditFutureRecurrenceValue,
+  onSelectEditFutureRecurrenceRepeatCount,
+  onOpenStopRecurrenceConfirmation,
+  onCancelStopRecurrence,
+  onConfirmStopRecurrence,
   onStartReschedule,
   reschedulingBookingKey,
+  stoppingRecurrenceBookingKey,
+  applyingEditFutureRecurrenceBookingKey,
+  editFutureRecurrenceState,
+  stopRecurrenceConfirmationBookingKey,
   replacementSuggestionData,
   onMoveCandidateToFreedSlot,
   onDismissReplacementSuggestions,
 }) {
+  const recurrenceUnitOptions = [
+    { label: "Weeks", value: "weeks" },
+    { label: "Months", value: "months" },
+  ];
+  const repeatCountOptions = Array.from({ length: 12 }, (_, index) => index + 1);
   const [expandedBookingKeys, setExpandedBookingKeys] = useState({});
 
   const toggleBookingExpansion = (bookingKey) => {
@@ -26,6 +44,12 @@ function BookingList({
 
     const [hours = "00", minutes = "00"] = String(timeValue).split(":");
     return `${hours}:${minutes}`;
+  };
+
+  const getIntervalValueOptions = (intervalUnit) => {
+    return intervalUnit === "months"
+      ? Array.from({ length: 12 }, (_, index) => index + 1)
+      : Array.from({ length: 6 }, (_, index) => index + 1);
   };
 
   return (
@@ -166,6 +190,32 @@ function BookingList({
             const displayStartTime = formatTimeDisplay(booking.slot);
             const displayEndTime = formatTimeDisplay(endTime);
             const fullName = `${booking.name} ${booking.surname}`.trim();
+            const canStopRecurrence = Boolean(
+              booking.hasFutureScheduledRecurrence
+            );
+            const canEditFutureRecurrence = Boolean(
+              booking.isRecurring && booking.recurrenceSeriesId
+            );
+            const isStoppingRecurrence =
+              stoppingRecurrenceBookingKey === booking.bookingKey;
+            const isApplyingEditFutureRecurrence =
+              applyingEditFutureRecurrenceBookingKey === booking.bookingKey;
+            const isStopRecurrenceConfirmationOpen =
+              stopRecurrenceConfirmationBookingKey === booking.bookingKey;
+            const isEditFutureRecurrenceOpen =
+              editFutureRecurrenceState?.bookingKey === booking.bookingKey;
+            const selectedEditIntervalUnit = isEditFutureRecurrenceOpen
+              ? editFutureRecurrenceState.intervalUnit
+              : "weeks";
+            const selectedEditIntervalValue = isEditFutureRecurrenceOpen
+              ? editFutureRecurrenceState.intervalValue
+              : 1;
+            const selectedEditRepeatCount = isEditFutureRecurrenceOpen
+              ? editFutureRecurrenceState.repeatCount
+              : 1;
+            const intervalValueOptions = getIntervalValueOptions(
+              selectedEditIntervalUnit
+            );
 
             return (
               <article
@@ -285,6 +335,40 @@ function BookingList({
                         : "Reschedule"}
                     </button>
 
+                    {canEditFutureRecurrence &&
+                      !isEditFutureRecurrenceOpen &&
+                      !isStopRecurrenceConfirmationOpen && (
+                      <button
+                        type="button"
+                        className="booking-panel-button booking-panel-button-primary"
+                        onClick={() =>
+                          onStartEditFutureRecurrence(booking.bookingKey)
+                        }
+                        disabled={isApplyingEditFutureRecurrence}
+                      >
+                        {isApplyingEditFutureRecurrence
+                          ? "Applying..."
+                          : "Edit future recurrence"}
+                      </button>
+                    )}
+
+                    {canStopRecurrence &&
+                      !isStopRecurrenceConfirmationOpen &&
+                      !isEditFutureRecurrenceOpen && (
+                      <button
+                        type="button"
+                        className="booking-panel-button booking-panel-button-warning"
+                        onClick={() =>
+                          onOpenStopRecurrenceConfirmation(booking.bookingKey)
+                        }
+                        disabled={isStoppingRecurrence || isApplyingEditFutureRecurrence}
+                      >
+                        {isStoppingRecurrence
+                          ? "Stopping..."
+                          : "Stop recurrence"}
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       className="booking-panel-button booking-panel-button-danger"
@@ -293,6 +377,160 @@ function BookingList({
                       Cancel
                     </button>
                   </div>
+
+                  {canEditFutureRecurrence && isEditFutureRecurrenceOpen && (
+                    <div className="booking-panel-edit-recurrence">
+                      <p className="booking-panel-edit-recurrence-text">
+                        Update the future recurrence from this appointment onward.
+                        The selected appointment stays unchanged.
+                      </p>
+
+                      <div className="booking-panel-edit-recurrence-group">
+                        <span className="booking-panel-detail-label">
+                          Interval unit
+                        </span>
+                        <div className="booking-panel-edit-option-grid">
+                          {recurrenceUnitOptions.map((unitOption) => (
+                            <button
+                              key={unitOption.value}
+                              type="button"
+                              className={`booking-panel-edit-option-button ${
+                                selectedEditIntervalUnit === unitOption.value
+                                  ? "booking-panel-edit-option-button-selected"
+                                  : ""
+                              }`}
+                              onClick={() =>
+                                onSelectEditFutureRecurrenceUnit(unitOption.value)
+                              }
+                              aria-pressed={
+                                selectedEditIntervalUnit === unitOption.value
+                              }
+                              disabled={isApplyingEditFutureRecurrence}
+                            >
+                              {unitOption.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="booking-panel-edit-recurrence-group">
+                        <span className="booking-panel-detail-label">
+                          Every how many {selectedEditIntervalUnit}
+                        </span>
+                        <div className="booking-panel-edit-chip-grid">
+                          {intervalValueOptions.map((intervalValue) => (
+                            <button
+                              key={intervalValue}
+                              type="button"
+                              className={`booking-panel-edit-chip-button ${
+                                selectedEditIntervalValue === intervalValue
+                                  ? "booking-panel-edit-chip-button-selected"
+                                  : ""
+                              }`}
+                              onClick={() =>
+                                onSelectEditFutureRecurrenceValue(intervalValue)
+                              }
+                              aria-pressed={
+                                selectedEditIntervalValue === intervalValue
+                              }
+                              disabled={isApplyingEditFutureRecurrence}
+                            >
+                              {intervalValue}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="booking-panel-edit-recurrence-group">
+                        <span className="booking-panel-detail-label">
+                          Future appointments to generate
+                        </span>
+                        <div className="booking-panel-edit-chip-grid">
+                          {repeatCountOptions.map((repeatCount) => (
+                            <button
+                              key={repeatCount}
+                              type="button"
+                              className={`booking-panel-edit-chip-button ${
+                                selectedEditRepeatCount === repeatCount
+                                  ? "booking-panel-edit-chip-button-selected"
+                                  : ""
+                              }`}
+                              onClick={() =>
+                                onSelectEditFutureRecurrenceRepeatCount(repeatCount)
+                              }
+                              aria-pressed={
+                                selectedEditRepeatCount === repeatCount
+                              }
+                              disabled={isApplyingEditFutureRecurrence}
+                            >
+                              {repeatCount}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="booking-panel-edit-recurrence-helper">
+                          This keeps the selected appointment and adds{" "}
+                          {selectedEditRepeatCount} new future appointment
+                          {selectedEditRepeatCount === 1 ? "" : "s"}.
+                        </p>
+                      </div>
+
+                      <div className="booking-panel-stop-confirmation-actions">
+                        <button
+                          type="button"
+                          className="booking-panel-button booking-panel-button-primary"
+                          onClick={() =>
+                            onApplyEditFutureRecurrence(booking.bookingKey)
+                          }
+                          disabled={isApplyingEditFutureRecurrence}
+                        >
+                          {isApplyingEditFutureRecurrence
+                            ? "Applying..."
+                            : "Apply changes"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="booking-panel-button booking-panel-button-neutral"
+                          onClick={onCancelEditFutureRecurrence}
+                          disabled={isApplyingEditFutureRecurrence}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {canStopRecurrence && isStopRecurrenceConfirmationOpen && (
+                    <div className="booking-panel-stop-confirmation">
+                      <p className="booking-panel-stop-confirmation-text">
+                        Stop all future recurring appointments in this series?
+                      </p>
+
+                      <div className="booking-panel-stop-confirmation-actions">
+                        <button
+                          type="button"
+                          className="booking-panel-button booking-panel-button-warning"
+                          onClick={() =>
+                            onConfirmStopRecurrence(booking.bookingKey)
+                          }
+                          disabled={isStoppingRecurrence}
+                        >
+                          {isStoppingRecurrence
+                            ? "Stopping..."
+                            : "Confirm stop"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="booking-panel-button booking-panel-button-neutral"
+                          onClick={onCancelStopRecurrence}
+                          disabled={isStoppingRecurrence}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </article>
             );
