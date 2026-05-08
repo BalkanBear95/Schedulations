@@ -140,6 +140,10 @@
   background-color: #ffffff;
 }
 
+.appointment-registry-results-mobile {
+  display: none;
+}
+
 .appointment-registry-table {
   width: 100%;
   min-width: 980px;
@@ -148,7 +152,7 @@
 
 .appointment-registry-table th,
 .appointment-registry-table td {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e8edf3;
   text-align: left;
   vertical-align: top;
@@ -164,7 +168,12 @@
 
 .appointment-registry-table td {
   color: #1f2937;
+  font-size: 14px;
   line-height: 1.5;
+}
+
+.appointment-registry-table tbody tr:nth-child(even) {
+  background-color: #fbfcfe;
 }
 
 .appointment-registry-table tbody tr:hover {
@@ -173,6 +182,94 @@
 
 .appointment-registry-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.appointment-registry-table-date,
+.appointment-registry-table-time {
+  white-space: nowrap;
+}
+
+.appointment-registry-mobile-list {
+  display: grid;
+  gap: 12px;
+}
+
+.appointment-registry-card {
+  padding: 14px;
+  border: 1px solid #d8e0e8;
+  border-radius: 16px;
+  background-color: #ffffff;
+}
+
+.appointment-registry-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.appointment-registry-card-patient {
+  margin: 0 0 4px;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.appointment-registry-card-procedure {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.appointment-registry-card-status {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid #d7dde5;
+  border-radius: 999px;
+  background-color: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.appointment-registry-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.appointment-registry-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appointment-registry-card-field-notes {
+  grid-column: 1 / -1;
+}
+
+.appointment-registry-card-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.appointment-registry-card-value {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.appointment-registry-card-value-nowrap {
+  white-space: nowrap;
 }
 
 @media (max-width: 980px) {
@@ -186,11 +283,49 @@
 }
 
 @media (max-width: 640px) {
+  .appointment-registry {
+    padding: 16px;
+  }
+
   .appointment-registry-filter-grid {
     grid-template-columns: 1fr;
   }
 
   .appointment-registry-count {
     white-space: normal;
+  }
+
+  .appointment-registry-results-desktop {
+    display: none;
+  }
+
+  .appointment-registry-results-mobile {
+    display: grid;
+  }
+
+  .appointment-registry-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .appointment-registry-card-header {
+    margin-bottom: 10px;
+  }
+
+  .appointment-registry-card-patient {
+    font-size: 15px;
+  }
+
+  .appointment-registry-card-procedure {
+    font-size: 13px;
+  }
+
+  .appointment-registry-card-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .appointment-registry-card-value {
+    font-size: 14px;
   }
 }

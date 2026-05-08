@@ -38,11 +38,7 @@ function AppointmentRegistry() {
       return dateOnly;
     }
 
-    return parsedDate.toLocaleDateString([], {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return parsedDate.toLocaleDateString("en-GB");
   };
 
   const formatTimeValue = (timeValue) => {
@@ -69,6 +65,23 @@ function AppointmentRegistry() {
 
     const normalizedValue = String(value).trim();
     return normalizedValue ? normalizedValue : "-";
+  };
+
+  const formatPatientName = (name, surname) => {
+    const fullName = [name, surname]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+
+    return fullName || "-";
+  };
+
+  const formatDuration = (slotsValue) => {
+    if (!slotsValue) {
+      return "-";
+    }
+
+    return `${slotsValue} slot${Number(slotsValue) === 1 ? "" : "s"}`;
   };
 
   const loadFilterOptions = async () => {
@@ -308,48 +321,122 @@ function AppointmentRegistry() {
       )}
 
       {!errorMessage && !isLoading && appointments.length > 0 && (
-        <div className="appointment-registry-table-wrapper">
-          <table className="appointment-registry-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Patient name</th>
-                <th>Patient surname</th>
-                <th>Phone</th>
-                <th>Procedure</th>
-                <th>Duration/slots</th>
-                <th>Status</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {appointments.map((appointment) => (
-                <tr key={appointment.id ?? `${appointment.appointment_date}-${appointment.start_time}`}>
-                  <td>{formatDate(appointment.appointment_date)}</td>
-                  <td>
-                    {formatTimeRange(
-                      appointment.start_time,
-                      appointment.end_time
-                    )}
-                  </td>
-                  <td>{formatTextValue(appointment.patient_name)}</td>
-                  <td>{formatTextValue(appointment.patient_surname)}</td>
-                  <td>{formatTextValue(appointment.phone)}</td>
-                  <td>{formatTextValue(appointment.procedure_name)}</td>
-                  <td>
-                    {appointment.procedure_slots
-                      ? `${appointment.procedure_slots} slot${
-                          Number(appointment.procedure_slots) === 1 ? "" : "s"
-                        }`
-                      : "-"}
-                  </td>
-                  <td>{formatTextValue(appointment.status)}</td>
-                  <td>{formatTextValue(appointment.notes)}</td>
+        <div className="appointment-registry-results">
+          <div className="appointment-registry-table-wrapper appointment-registry-results-desktop">
+            <table className="appointment-registry-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Patient name</th>
+                  <th>Patient surname</th>
+                  <th>Phone</th>
+                  <th>Procedure</th>
+                  <th>Duration/slots</th>
+                  <th>Status</th>
+                  <th>Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {appointments.map((appointment) => (
+                  <tr
+                    key={
+                      appointment.id ??
+                      `${appointment.appointment_date}-${appointment.start_time}`
+                    }
+                  >
+                    <td className="appointment-registry-table-date">
+                      {formatDate(appointment.appointment_date)}
+                    </td>
+                    <td className="appointment-registry-table-time">
+                      {formatTimeRange(
+                        appointment.start_time,
+                        appointment.end_time
+                      )}
+                    </td>
+                    <td>{formatTextValue(appointment.patient_name)}</td>
+                    <td>{formatTextValue(appointment.patient_surname)}</td>
+                    <td>{formatTextValue(appointment.phone)}</td>
+                    <td>{formatTextValue(appointment.procedure_name)}</td>
+                    <td>{formatDuration(appointment.procedure_slots)}</td>
+                    <td>{formatTextValue(appointment.status)}</td>
+                    <td>{formatTextValue(appointment.notes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="appointment-registry-mobile-list appointment-registry-results-mobile">
+            {appointments.map((appointment) => (
+              <article
+                key={
+                  appointment.id ??
+                  `${appointment.appointment_date}-${appointment.start_time}-mobile`
+                }
+                className="appointment-registry-card"
+              >
+                <div className="appointment-registry-card-header">
+                  <div>
+                    <p className="appointment-registry-card-patient">
+                      {formatPatientName(
+                        appointment.patient_name,
+                        appointment.patient_surname
+                      )}
+                    </p>
+                    <p className="appointment-registry-card-procedure">
+                      {formatTextValue(appointment.procedure_name)}
+                    </p>
+                  </div>
+                  <div className="appointment-registry-card-status">
+                    {formatTextValue(appointment.status)}
+                  </div>
+                </div>
+
+                <div className="appointment-registry-card-grid">
+                  <div className="appointment-registry-card-field">
+                    <span className="appointment-registry-card-label">Date</span>
+                    <span className="appointment-registry-card-value">
+                      {formatDate(appointment.appointment_date)}
+                    </span>
+                  </div>
+
+                  <div className="appointment-registry-card-field">
+                    <span className="appointment-registry-card-label">Time</span>
+                    <span className="appointment-registry-card-value appointment-registry-card-value-nowrap">
+                      {formatTimeRange(
+                        appointment.start_time,
+                        appointment.end_time
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="appointment-registry-card-field">
+                    <span className="appointment-registry-card-label">Phone</span>
+                    <span className="appointment-registry-card-value">
+                      {formatTextValue(appointment.phone)}
+                    </span>
+                  </div>
+
+                  <div className="appointment-registry-card-field">
+                    <span className="appointment-registry-card-label">
+                      Duration/slots
+                    </span>
+                    <span className="appointment-registry-card-value">
+                      {formatDuration(appointment.procedure_slots)}
+                    </span>
+                  </div>
+
+                  <div className="appointment-registry-card-field appointment-registry-card-field-notes">
+                    <span className="appointment-registry-card-label">Notes</span>
+                    <span className="appointment-registry-card-value">
+                      {formatTextValue(appointment.notes)}
+                    </span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       )}
     </section>
