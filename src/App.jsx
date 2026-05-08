@@ -5,9 +5,11 @@ import ProcedureSelector from "./components/ProcedureSelector";
 import SlotList from "./components/SlotList";
 import BookingForm from "./components/BookingForm";
 import BookingList from "./components/BookingList";
+import AppointmentRegistry from "./components/AppointmentRegistry";
 import { supabase } from "./lib/supabase";
 
 function App() {
+  const [activeView, setActiveView] = useState("scheduler");
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedMonth, setSelectedMonth] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -2057,34 +2059,143 @@ function App() {
     setReplacementOpportunity(null);
   };
 
-  const handleMoveCandidateToFreedSlot = (candidateBookingKey) => {
+  const handleMoveCandidateToFreedSlot = async (candidateBookingKey) => {
     if (!replacementOpportunity) {
+      console.error(
+        "Failed to move replacement candidate because no replacement opportunity is available."
+      );
       return;
     }
 
-    const { freedBooking, excludedBookingKeys = [] } = replacementOpportunity;
-    let didMoveCandidate = false;
+    const currentReplacementOpportunity = {
+      ...replacementOpportunity,
+      candidateBooking: bookings[candidateBookingKey],
+    };
+    const {
+      candidateBooking,
+      freedBooking,
+      excludedBookingKeys = [],
+    } = currentReplacementOpportunity;
+
+    if (!candidateBooking) {
+      console.error(
+        "Failed to move replacement candidate because the candidate booking is missing.",
+        {
+          candidateBookingKey,
+          replacementOpportunity: currentReplacementOpportunity,
+        }
+      );
+      return;
+    }
+
+    if (!freedBooking) {
+      console.error(
+        "Failed to move replacement candidate because the freed booking is missing.",
+        replacementOpportunity
+      );
+      return;
+    }
+
+    if (!candidateBooking.id) {
+      console.error(
+        "Failed to move replacement candidate in Supabase because the booking id is missing.",
+        candidateBooking
+      );
+      return;
+    }
+
+    const startTime = freedBooking.slot;
+    const startSlotIndex = allSlots.indexOf(startTime);
+
+    if (startSlotIndex === -1) {
+      console.error(
+        "Failed to move replacement candidate because the freed slot start time is invalid.",
+        freedBooking
+      );
+      return;
+    }
+
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = startMinutes + candidateBooking.slotsUsed * 5;
+    const appointmentDate = formatAppointmentDate(
+      freedBooking.year,
+      freedBooking.month,
+      freedBooking.day
+    );
+    const candidateBookingWithKey = {
+      ...candidateBooking,
+      bookingKey: candidateBookingKey,
+    };
+    const normalizedFreedBooking = {
+      ...freedBooking,
+      slot: startTime,
+      startSlotIndex,
+      startMinutes,
+    };
+
+    if (
+      !canBookingFitAtFreedSlot(
+        candidateBookingWithKey,
+        normalizedFreedBooking,
+        bookings,
+        excludedBookingKeys
+      )
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({
+        appointment_date: appointmentDate,
+        start_time: startTime,
+        end_time: formatMinutes(endMinutes),
+        start_slot_index: startSlotIndex,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", candidateBooking.id);
+
+    if (error) {
+      console.error(
+        "Failed to move replacement candidate to the freed slot in Supabase.",
+        error
+      );
+      return;
+    }
 
     setBookings((prevBookings) => {
-      const candidateBooking = prevBookings[candidateBookingKey];
+      const currentCandidateBooking = prevBookings[candidateBookingKey];
 
-      if (!candidateBooking) {
+      if (!currentCandidateBooking) {
+        console.error(
+          "Failed to move replacement candidate locally because the booking no longer exists.",
+          {
+            candidateBookingKey,
+          }
+        );
         return prevBookings;
       }
 
-      const candidateBookingWithKey = {
-        ...candidateBooking,
+      const currentCandidateBookingWithKey = {
+        ...currentCandidateBooking,
         bookingKey: candidateBookingKey,
       };
 
       if (
         !canBookingFitAtFreedSlot(
-          candidateBookingWithKey,
-          freedBooking,
+          currentCandidateBookingWithKey,
+          normalizedFreedBooking,
           prevBookings,
           excludedBookingKeys
         )
       ) {
+        console.error(
+          "Failed to move replacement candidate locally because the booking no longer fits the freed slot.",
+          {
+            candidateBookingKey,
+            freedBooking: normalizedFreedBooking,
+          }
+        );
         return prevBookings;
       }
 
@@ -2092,29 +2203,25 @@ function App() {
         freedBooking.year,
         freedBooking.month,
         freedBooking.day,
-        freedBooking.slot
+        startTime
       );
       const updatedBookings = { ...prevBookings };
 
       delete updatedBookings[candidateBookingKey];
       updatedBookings[nextBookingKey] = {
-        ...candidateBooking,
+        ...currentCandidateBooking,
         year: freedBooking.year,
         month: freedBooking.month,
         day: freedBooking.day,
-        slot: freedBooking.slot,
-        startSlotIndex: freedBooking.startSlotIndex,
-        startMinutes: freedBooking.startMinutes,
-        endMinutes: freedBooking.startMinutes + candidateBooking.slotsUsed * 5,
+        slot: startTime,
+        startSlotIndex,
+        startMinutes,
+        endMinutes: startMinutes + currentCandidateBooking.slotsUsed * 5,
       };
-      didMoveCandidate = true;
 
       return updatedBookings;
     });
-
-    if (didMoveCandidate) {
-      setReplacementOpportunity(null);
-    }
+    setReplacementOpportunity(null);
   };
 
   const handleSelectSlot = (slot) => {
@@ -2245,6 +2352,34 @@ function App() {
             font-size: 14px;
             line-height: 1.4;
             white-space: nowrap;
+          }
+
+          .app-view-switch {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+          }
+
+          .app-view-switch-button {
+            padding: 10px 16px;
+            border: 1px solid #cfd6de;
+            border-radius: 999px;
+            background-color: #ffffff;
+            color: #334155;
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease,
+              color 0.2s ease;
+          }
+
+          .app-view-switch-button:hover {
+            background-color: #f6f8fb;
+          }
+
+          .app-view-switch-button-active {
+            border-color: #7aa7d9;
+            background-color: #7aa7d9;
+            color: #ffffff;
           }
 
           .app-schedule-layout {
@@ -2517,496 +2652,548 @@ function App() {
         </div>
       </div>
 
-      <DayList
-        years={years}
-        selectedYear={selectedYear}
-        onSelectYear={handleSelectYear}
-        months={months}
-        selectedMonth={selectedMonth}
-        onSelectMonth={handleSelectMonth}
-        days={days}
-        selectedDay={selectedDay}
-        onSelectDay={handleSelectDay}
-      />
+      <div className="app-view-switch">
+        <button
+          type="button"
+          className={`app-view-switch-button ${
+            activeView === "scheduler" ? "app-view-switch-button-active" : ""
+          }`}
+          onClick={() => setActiveView("scheduler")}
+        >
+          Scheduler
+        </button>
+        <button
+          type="button"
+          className={`app-view-switch-button ${
+            activeView === "registry" ? "app-view-switch-button-active" : ""
+          }`}
+          onClick={() => setActiveView("registry")}
+        >
+          Appointment Registry
+        </button>
+      </div>
 
-      {selectedDay && (
-        <div className="app-section">
-          <h2>
-            {months[selectedMonth]} {selectedDay}, {selectedYear}
-          </h2>
-
-          <ProcedureSelector
-            procedures={procedures}
-            selectedProcedure={selectedProcedure}
-            onSelectProcedure={handleSelectProcedure}
+      {activeView === "scheduler" && (
+        <>
+          <DayList
+            years={years}
+            selectedYear={selectedYear}
+            onSelectYear={handleSelectYear}
+            months={months}
+            selectedMonth={selectedMonth}
+            onSelectMonth={handleSelectMonth}
+            days={days}
+            selectedDay={selectedDay}
+            onSelectDay={handleSelectDay}
           />
 
-          <div className="app-schedule-layout">
-            <div className="app-slot-column">
-              <SlotList
-                slots={allSlots}
-                bookings={bookingsForSelectedDay}
+          {selectedDay && (
+            <div className="app-section">
+              <h2>
+                {months[selectedMonth]} {selectedDay}, {selectedYear}
+              </h2>
+
+              <ProcedureSelector
                 procedures={procedures}
-                scheduleConfig={scheduleConfig}
-                availableSlots={availableStartSlots}
-                selectedSlot={selectedSlot}
-                onSelectSlot={handleSelectSlot}
                 selectedProcedure={selectedProcedure}
-                selectedProcedureSlots={slotsNeededForCurrentMode}
-                isRescheduleMode={Boolean(reschedulingBooking)}
-                reschedulingBooking={reschedulingBooking}
-                onConfirmReschedule={handleConfirmReschedule}
-                onCancelReschedule={handleCancelReschedule}
-                manualConflictResolution={manualConflictResolution}
-                conflictHighlightedSlotIndexes={activeConflictHighlightedSlotIndexes}
-                onConfirmManualConflictResolution={
-                  confirmManualConflictResolution
-                }
-                onCancelManualConflictResolution={cancelManualConflictResolution}
-                isSavingManualConflictResolution={
-                  isSavingManualConflictResolution
-                }
+                onSelectProcedure={handleSelectProcedure}
               />
 
-              {selectedProcedure &&
-                selectedSlot &&
-                !reschedulingBooking &&
-                !manualConflictResolution && (
-                <div className="app-booking-form-panel">
-                  <h3 className="app-booking-form-heading">
-                    Booking for {selectedSlot} - {selectedProcedure}
-                  </h3>
-                  <BookingForm
-                    onSave={handleSaveBooking}
-                    isSaving={isSavingBooking}
+              <div className="app-schedule-layout">
+                <div className="app-slot-column">
+                  <SlotList
+                    slots={allSlots}
+                    bookings={bookingsForSelectedDay}
+                    procedures={procedures}
+                    scheduleConfig={scheduleConfig}
+                    availableSlots={availableStartSlots}
+                    selectedSlot={selectedSlot}
+                    onSelectSlot={handleSelectSlot}
+                    selectedProcedure={selectedProcedure}
+                    selectedProcedureSlots={slotsNeededForCurrentMode}
+                    isRescheduleMode={Boolean(reschedulingBooking)}
+                    reschedulingBooking={reschedulingBooking}
+                    onConfirmReschedule={handleConfirmReschedule}
+                    onCancelReschedule={handleCancelReschedule}
+                    manualConflictResolution={manualConflictResolution}
+                    conflictHighlightedSlotIndexes={
+                      activeConflictHighlightedSlotIndexes
+                    }
+                    onConfirmManualConflictResolution={
+                      confirmManualConflictResolution
+                    }
+                    onCancelManualConflictResolution={
+                      cancelManualConflictResolution
+                    }
+                    isSavingManualConflictResolution={
+                      isSavingManualConflictResolution
+                    }
                   />
-                </div>
-              )}
 
-              {bookingSaveFeedback && (
-                <div
-                  className={`app-booking-feedback-panel ${
-                    bookingSaveFeedback.status === "error"
-                      ? "app-booking-feedback-panel-error"
-                      : "app-booking-feedback-panel-success"
-                  }`}
-                >
-                  <h3 className="app-booking-feedback-title">
-                    {bookingSaveFeedback.title}
-                  </h3>
-                  <p className="app-booking-feedback-text">
-                    {bookingSaveFeedback.message}
-                  </p>
-
-                  {bookingSaveFeedback.createdFutureOccurrences && (
-                    <div className="app-booking-feedback-section">
-                      <h4 className="app-booking-feedback-section-title">
-                        Future appointments created (
-                        {bookingSaveFeedback.createdFutureOccurrences.length})
-                      </h4>
-
-                      {bookingSaveFeedback.createdFutureOccurrences.length > 0 ? (
-                        <ul className="app-booking-feedback-list">
-                          {bookingSaveFeedback.createdFutureOccurrences.map(
-                            (occurrenceLabel) => (
-                              <li key={`created-${occurrenceLabel}`}>
-                                {occurrenceLabel}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      ) : (
-                        <p className="app-booking-feedback-empty">
-                          No future appointments were created.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {bookingSaveFeedback.conflictedFutureOccurrences && (
-                    <div className="app-booking-feedback-section">
-                      <h4 className="app-booking-feedback-section-title">
-                        Future appointments skipped because the exact slot was occupied (
-                        {bookingSaveFeedback.conflictedFutureOccurrences.length})
-                      </h4>
-
-                      {bookingSaveFeedback.conflictedFutureOccurrences.length > 0 ? (
-                        <ul className="app-booking-feedback-list">
-                          {bookingSaveFeedback.conflictedFutureOccurrences.map(
-                            (occurrenceLabel) => (
-                              <li key={`conflict-${occurrenceLabel}`}>
-                                {occurrenceLabel}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      ) : (
-                        <p className="app-booking-feedback-empty">
-                          No occupied-slot conflicts were found.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {bookingSaveFeedback.failedFutureOccurrences &&
-                    bookingSaveFeedback.failedFutureOccurrences.length > 0 && (
-                      <div className="app-booking-feedback-section">
-                        <h4 className="app-booking-feedback-section-title">
-                          Future appointments that could not be saved (
-                          {bookingSaveFeedback.failedFutureOccurrences.length})
-                        </h4>
-                        <ul className="app-booking-feedback-list">
-                          {bookingSaveFeedback.failedFutureOccurrences.map(
-                            (occurrenceLabel) => (
-                              <li key={`failed-${occurrenceLabel}`}>
-                                {occurrenceLabel}
-                              </li>
-                            )
-                          )}
-                        </ul>
+                  {selectedProcedure &&
+                    selectedSlot &&
+                    !reschedulingBooking &&
+                    !manualConflictResolution && (
+                      <div className="app-booking-form-panel">
+                        <h3 className="app-booking-form-heading">
+                          Booking for {selectedSlot} - {selectedProcedure}
+                        </h3>
+                        <BookingForm
+                          onSave={handleSaveBooking}
+                          isSaving={isSavingBooking}
+                        />
                       </div>
                     )}
-                </div>
-              )}
 
-              {recurringSummary && (
-                <div className="app-recurring-summary-panel">
-                  <div className="app-recurring-summary-header">
-                    <div>
-                      <h3 className="app-recurring-summary-title">
-                        Recurrence summary
+                  {bookingSaveFeedback && (
+                    <div
+                      className={`app-booking-feedback-panel ${
+                        bookingSaveFeedback.status === "error"
+                          ? "app-booking-feedback-panel-error"
+                          : "app-booking-feedback-panel-success"
+                      }`}
+                    >
+                      <h3 className="app-booking-feedback-title">
+                        {bookingSaveFeedback.title}
                       </h3>
-                      <p className="app-recurring-summary-text">
-                        Original appointment:{" "}
-                        {recurringSummary.originalOccurrenceLabel}
+                      <p className="app-booking-feedback-text">
+                        {bookingSaveFeedback.message}
                       </p>
-                    </div>
-                    <div className="app-recurring-summary-text">
-                      Procedure: {recurringSummary.procedure}
-                    </div>
-                  </div>
 
-                  <div className="app-recurring-summary-metrics">
-                    <div className="app-recurring-summary-metric">
-                      <span className="app-recurring-summary-metric-label">
-                        Inserted
-                      </span>
-                      <span className="app-recurring-summary-metric-value">
-                        {totalInsertedRecurringOccurrences}
-                      </span>
-                    </div>
+                      {bookingSaveFeedback.createdFutureOccurrences && (
+                        <div className="app-booking-feedback-section">
+                          <h4 className="app-booking-feedback-section-title">
+                            Future appointments created (
+                            {bookingSaveFeedback.createdFutureOccurrences.length})
+                          </h4>
 
-                    <div className="app-recurring-summary-metric">
-                      <span className="app-recurring-summary-metric-label">
-                        Warning candidates
-                      </span>
-                      <span className="app-recurring-summary-metric-value">
-                        {recurringSummary.warningCandidates.length}
-                      </span>
-                    </div>
+                          {bookingSaveFeedback.createdFutureOccurrences.length >
+                          0 ? (
+                            <ul className="app-booking-feedback-list">
+                              {bookingSaveFeedback.createdFutureOccurrences.map(
+                                (occurrenceLabel) => (
+                                  <li key={`created-${occurrenceLabel}`}>
+                                    {occurrenceLabel}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          ) : (
+                            <p className="app-booking-feedback-empty">
+                              No future appointments were created.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
-                    <div className="app-recurring-summary-metric">
-                      <span className="app-recurring-summary-metric-label">
-                        Hard conflicts
-                      </span>
-                      <span className="app-recurring-summary-metric-value">
-                        {recurringSummary.hardConflicts.length}
-                      </span>
-                    </div>
-                  </div>
+                      {bookingSaveFeedback.conflictedFutureOccurrences && (
+                        <div className="app-booking-feedback-section">
+                          <h4 className="app-booking-feedback-section-title">
+                            Future appointments skipped because the exact slot was occupied (
+                            {bookingSaveFeedback.conflictedFutureOccurrences.length}
+                            )
+                          </h4>
 
-                  <div className="app-recurring-summary-section">
-                    <h4 className="app-recurring-summary-section-title">
-                      Future appointments inserted automatically (
-                      {recurringSummary.autoInsertedOccurrences.length})
-                    </h4>
-                    {recurringSummary.autoInsertedOccurrences.length > 0 ? (
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.autoInsertedOccurrences.map(
-                          (occurrence) => (
-                            <div
-                              key={`auto-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                              className="app-recurring-summary-card"
-                            >
-                              <p className="app-recurring-summary-card-title">
-                                {occurrence.label}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                {occurrence.procedure} at {occurrence.timeLabel}
-                              </p>
-                            </div>
-                          )
+                          {bookingSaveFeedback.conflictedFutureOccurrences
+                            .length > 0 ? (
+                            <ul className="app-booking-feedback-list">
+                              {bookingSaveFeedback.conflictedFutureOccurrences.map(
+                                (occurrenceLabel) => (
+                                  <li key={`conflict-${occurrenceLabel}`}>
+                                    {occurrenceLabel}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          ) : (
+                            <p className="app-booking-feedback-empty">
+                              No occupied-slot conflicts were found.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {bookingSaveFeedback.failedFutureOccurrences &&
+                        bookingSaveFeedback.failedFutureOccurrences.length >
+                          0 && (
+                          <div className="app-booking-feedback-section">
+                            <h4 className="app-booking-feedback-section-title">
+                              Future appointments that could not be saved (
+                              {bookingSaveFeedback.failedFutureOccurrences.length}
+                              )
+                            </h4>
+                            <ul className="app-booking-feedback-list">
+                              {bookingSaveFeedback.failedFutureOccurrences.map(
+                                (occurrenceLabel) => (
+                                  <li key={`failed-${occurrenceLabel}`}>
+                                    {occurrenceLabel}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
                         )}
-                      </div>
-                    ) : (
-                      <p className="app-recurring-summary-section-text">
-                        No future appointments were inserted automatically.
-                      </p>
-                    )}
-                  </div>
-
-                  {recurringSummary.confirmedWarningInsertions.length > 0 && (
-                    <div className="app-recurring-summary-section">
-                      <h4 className="app-recurring-summary-section-title">
-                        Warning candidates inserted after confirmation (
-                        {recurringSummary.confirmedWarningInsertions.length})
-                      </h4>
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.confirmedWarningInsertions.map(
-                          (occurrence) => (
-                            <div
-                              key={`confirmed-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                              className="app-recurring-summary-card"
-                            >
-                              <p className="app-recurring-summary-card-title">
-                                {occurrence.label}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                {occurrence.procedure} at {occurrence.timeLabel}
-                              </p>
-                            </div>
-                          )
-                        )}
-                      </div>
                     </div>
                   )}
 
-                  {recurringSummary.manuallyResolvedOccurrences.length > 0 && (
-                    <div className="app-recurring-summary-section">
-                      <h4 className="app-recurring-summary-section-title">
-                        Hard conflicts resolved manually (
-                        {recurringSummary.manuallyResolvedOccurrences.length})
-                      </h4>
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.manuallyResolvedOccurrences.map(
-                          (occurrence) => (
-                            <div
-                              key={`manual-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                              className="app-recurring-summary-card"
-                            >
-                              <p className="app-recurring-summary-card-title">
-                                {occurrence.label}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                {occurrence.procedure} at {occurrence.timeLabel}
-                              </p>
-                            </div>
-                          )
-                        )}
+                  {recurringSummary && (
+                    <div className="app-recurring-summary-panel">
+                      <div className="app-recurring-summary-header">
+                        <div>
+                          <h3 className="app-recurring-summary-title">
+                            Recurrence summary
+                          </h3>
+                          <p className="app-recurring-summary-text">
+                            Original appointment:{" "}
+                            {recurringSummary.originalOccurrenceLabel}
+                          </p>
+                        </div>
+                        <div className="app-recurring-summary-text">
+                          Procedure: {recurringSummary.procedure}
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  <div className="app-recurring-summary-section">
-                    <h4 className="app-recurring-summary-section-title">
-                      Warning candidates waiting for confirmation (
-                      {recurringSummary.warningCandidates.length})
-                    </h4>
-
-                    {recurringSummary.warningCandidates.length > 0 ? (
-                      <>
-                        <div className="app-recurring-summary-list">
-                          {recurringSummary.warningCandidates.map((occurrence) => (
-                            <div
-                              key={`warning-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                              className="app-recurring-summary-card app-recurring-summary-card-warning"
-                            >
-                              <p className="app-recurring-summary-card-title">
-                                {occurrence.dateLabel} at {occurrence.slot}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                {occurrence.procedure}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                Overlap: {occurrence.overlapSlots} slot
-                                {occurrence.overlapSlots === 1 ? "" : "s"} (
-                                {occurrence.overlapMinutes} min)
-                              </p>
-                            </div>
-                          ))}
+                      <div className="app-recurring-summary-metrics">
+                        <div className="app-recurring-summary-metric">
+                          <span className="app-recurring-summary-metric-label">
+                            Inserted
+                          </span>
+                          <span className="app-recurring-summary-metric-value">
+                            {totalInsertedRecurringOccurrences}
+                          </span>
                         </div>
 
-                        <div className="app-recurring-summary-actions">
-                          <button
-                            type="button"
-                            className="app-recurring-summary-button app-recurring-summary-button-primary"
-                            onClick={handleConfirmRecurringWarnings}
-                            disabled={isSavingRecurringWarnings}
-                          >
-                            {isSavingRecurringWarnings
-                              ? "Confirming..."
-                              : "Insert all warning candidates"}
-                          </button>
-                          <button
-                            type="button"
-                            className="app-recurring-summary-button app-recurring-summary-button-secondary"
-                            onClick={handleDismissRecurringWarnings}
-                            disabled={isSavingRecurringWarnings}
-                          >
-                            Dismiss warning candidates
-                          </button>
+                        <div className="app-recurring-summary-metric">
+                          <span className="app-recurring-summary-metric-label">
+                            Warning candidates
+                          </span>
+                          <span className="app-recurring-summary-metric-value">
+                            {recurringSummary.warningCandidates.length}
+                          </span>
                         </div>
-                      </>
-                    ) : (
-                      <p className="app-recurring-summary-section-text">
-                        {recurringSummary.warningActionStatus === "dismissed"
-                          ? "Warning candidates were dismissed and not inserted."
-                          : recurringSummary.warningActionStatus === "confirmed"
-                          ? "All warning candidates have been processed."
-                          : "No warning candidates were found."}
-                      </p>
-                    )}
-                  </div>
 
-                  {recurringSummary.dismissedWarningCandidates.length > 0 && (
-                    <div className="app-recurring-summary-section">
-                      <h4 className="app-recurring-summary-section-title">
-                        Warning candidates not inserted (
-                        {recurringSummary.dismissedWarningCandidates.length})
-                      </h4>
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.dismissedWarningCandidates.map(
-                          (occurrence) => (
-                            <div
-                              key={`dismissed-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                              className="app-recurring-summary-card"
-                            >
-                              <p className="app-recurring-summary-card-title">
-                                {occurrence.dateLabel} at {occurrence.slot}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                {occurrence.procedure}
-                              </p>
-                              <p className="app-recurring-summary-card-meta">
-                                Overlap kept at {occurrence.overlapSlots} slot
-                                {occurrence.overlapSlots === 1 ? "" : "s"} (
-                                {occurrence.overlapMinutes} min)
-                              </p>
-                            </div>
-                          )
+                        <div className="app-recurring-summary-metric">
+                          <span className="app-recurring-summary-metric-label">
+                            Hard conflicts
+                          </span>
+                          <span className="app-recurring-summary-metric-value">
+                            {recurringSummary.hardConflicts.length}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="app-recurring-summary-section">
+                        <h4 className="app-recurring-summary-section-title">
+                          Future appointments inserted automatically (
+                          {recurringSummary.autoInsertedOccurrences.length})
+                        </h4>
+                        {recurringSummary.autoInsertedOccurrences.length > 0 ? (
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.autoInsertedOccurrences.map(
+                              (occurrence) => (
+                                <div
+                                  key={`auto-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                  className="app-recurring-summary-card"
+                                >
+                                  <p className="app-recurring-summary-card-title">
+                                    {occurrence.label}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    {occurrence.procedure} at{" "}
+                                    {occurrence.timeLabel}
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        ) : (
+                          <p className="app-recurring-summary-section-text">
+                            No future appointments were inserted automatically.
+                          </p>
                         )}
                       </div>
-                    </div>
-                  )}
 
-                  <div className="app-recurring-summary-section">
-                    <h4 className="app-recurring-summary-section-title">
-                      Hard conflicts ({recurringSummary.hardConflicts.length})
-                    </h4>
-                    {recurringSummary.hardConflicts.length > 0 ? (
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.hardConflicts.map((occurrence) => (
-                          <div
-                            key={`conflict-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                            className="app-recurring-summary-card app-recurring-summary-card-conflict"
-                          >
-                            <p className="app-recurring-summary-card-title">
-                              {occurrence.dateLabel} at {occurrence.slot}
-                            </p>
-                            <p className="app-recurring-summary-card-meta">
-                              {occurrence.procedure}
-                            </p>
-                            <p className="app-recurring-summary-card-meta">
-                              Overlap: {occurrence.overlapSlots} slot
-                              {occurrence.overlapSlots === 1 ? "" : "s"} (
-                              {occurrence.overlapMinutes} min)
-                            </p>
+                      {recurringSummary.confirmedWarningInsertions.length > 0 && (
+                        <div className="app-recurring-summary-section">
+                          <h4 className="app-recurring-summary-section-title">
+                            Warning candidates inserted after confirmation (
+                            {recurringSummary.confirmedWarningInsertions.length})
+                          </h4>
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.confirmedWarningInsertions.map(
+                              (occurrence) => (
+                                <div
+                                  key={`confirmed-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                  className="app-recurring-summary-card"
+                                >
+                                  <p className="app-recurring-summary-card-title">
+                                    {occurrence.label}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    {occurrence.procedure} at{" "}
+                                    {occurrence.timeLabel}
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {recurringSummary.manuallyResolvedOccurrences.length >
+                        0 && (
+                        <div className="app-recurring-summary-section">
+                          <h4 className="app-recurring-summary-section-title">
+                            Hard conflicts resolved manually (
+                            {recurringSummary.manuallyResolvedOccurrences.length})
+                          </h4>
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.manuallyResolvedOccurrences.map(
+                              (occurrence) => (
+                                <div
+                                  key={`manual-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                  className="app-recurring-summary-card"
+                                >
+                                  <p className="app-recurring-summary-card-title">
+                                    {occurrence.label}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    {occurrence.procedure} at{" "}
+                                    {occurrence.timeLabel}
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="app-recurring-summary-section">
+                        <h4 className="app-recurring-summary-section-title">
+                          Warning candidates waiting for confirmation (
+                          {recurringSummary.warningCandidates.length})
+                        </h4>
+
+                        {recurringSummary.warningCandidates.length > 0 ? (
+                          <>
+                            <div className="app-recurring-summary-list">
+                              {recurringSummary.warningCandidates.map(
+                                (occurrence) => (
+                                  <div
+                                    key={`warning-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                    className="app-recurring-summary-card app-recurring-summary-card-warning"
+                                  >
+                                    <p className="app-recurring-summary-card-title">
+                                      {occurrence.dateLabel} at {occurrence.slot}
+                                    </p>
+                                    <p className="app-recurring-summary-card-meta">
+                                      {occurrence.procedure}
+                                    </p>
+                                    <p className="app-recurring-summary-card-meta">
+                                      Overlap: {occurrence.overlapSlots} slot
+                                      {occurrence.overlapSlots === 1
+                                        ? ""
+                                        : "s"}{" "}
+                                      ({occurrence.overlapMinutes} min)
+                                    </p>
+                                  </div>
+                                )
+                              )}
+                            </div>
+
                             <div className="app-recurring-summary-actions">
                               <button
                                 type="button"
                                 className="app-recurring-summary-button app-recurring-summary-button-primary"
-                                onClick={() =>
-                                  startManualConflictResolution(occurrence)
-                                }
-                                disabled={
-                                  isSavingManualConflictResolution ||
-                                  (manualConflictResolution &&
-                                    getRecurringOccurrenceKey(occurrence) ===
-                                      manualConflictResolution.occurrenceKey)
-                                }
+                                onClick={handleConfirmRecurringWarnings}
+                                disabled={isSavingRecurringWarnings}
                               >
-                                {manualConflictResolution &&
-                                getRecurringOccurrenceKey(occurrence) ===
-                                  manualConflictResolution.occurrenceKey
-                                  ? "Resolving..."
-                                  : "Resolve manually"}
+                                {isSavingRecurringWarnings
+                                  ? "Confirming..."
+                                  : "Insert all warning candidates"}
+                              </button>
+                              <button
+                                type="button"
+                                className="app-recurring-summary-button app-recurring-summary-button-secondary"
+                                onClick={handleDismissRecurringWarnings}
+                                disabled={isSavingRecurringWarnings}
+                              >
+                                Dismiss warning candidates
                               </button>
                             </div>
-                          </div>
-                        ))}
+                          </>
+                        ) : (
+                          <p className="app-recurring-summary-section-text">
+                            {recurringSummary.warningActionStatus === "dismissed"
+                              ? "Warning candidates were dismissed and not inserted."
+                              : recurringSummary.warningActionStatus ===
+                                  "confirmed"
+                                ? "All warning candidates have been processed."
+                                : "No warning candidates were found."}
+                          </p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="app-recurring-summary-section-text">
-                        No hard conflicts were found.
-                      </p>
-                    )}
-                  </div>
 
-                  {recurringSummary.failedOccurrences.length > 0 && (
-                    <div className="app-recurring-summary-section">
-                      <h4 className="app-recurring-summary-section-title">
-                        Could not be saved ({recurringSummary.failedOccurrences.length})
-                      </h4>
-                      <div className="app-recurring-summary-list">
-                        {recurringSummary.failedOccurrences.map((occurrence) => (
-                          <div
-                            key={`failed-${occurrence.recurrenceIndex}-${occurrence.label}`}
-                            className="app-recurring-summary-card app-recurring-summary-card-conflict"
-                          >
-                            <p className="app-recurring-summary-card-title">
-                              {occurrence.label}
-                            </p>
-                            <p className="app-recurring-summary-card-meta">
-                              The appointment was not inserted because saving it failed.
-                            </p>
+                      {recurringSummary.dismissedWarningCandidates.length >
+                        0 && (
+                        <div className="app-recurring-summary-section">
+                          <h4 className="app-recurring-summary-section-title">
+                            Warning candidates not inserted (
+                            {recurringSummary.dismissedWarningCandidates.length})
+                          </h4>
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.dismissedWarningCandidates.map(
+                              (occurrence) => (
+                                <div
+                                  key={`dismissed-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                  className="app-recurring-summary-card"
+                                >
+                                  <p className="app-recurring-summary-card-title">
+                                    {occurrence.dateLabel} at {occurrence.slot}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    {occurrence.procedure}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    Overlap kept at {occurrence.overlapSlots} slot
+                                    {occurrence.overlapSlots === 1
+                                      ? ""
+                                      : "s"}{" "}
+                                    ({occurrence.overlapMinutes} min)
+                                  </p>
+                                </div>
+                              )
+                            )}
                           </div>
-                        ))}
+                        </div>
+                      )}
+
+                      <div className="app-recurring-summary-section">
+                        <h4 className="app-recurring-summary-section-title">
+                          Hard conflicts ({recurringSummary.hardConflicts.length})
+                        </h4>
+                        {recurringSummary.hardConflicts.length > 0 ? (
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.hardConflicts.map((occurrence) => (
+                              <div
+                                key={`conflict-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                className="app-recurring-summary-card app-recurring-summary-card-conflict"
+                              >
+                                <p className="app-recurring-summary-card-title">
+                                  {occurrence.dateLabel} at {occurrence.slot}
+                                </p>
+                                <p className="app-recurring-summary-card-meta">
+                                  {occurrence.procedure}
+                                </p>
+                                <p className="app-recurring-summary-card-meta">
+                                  Overlap: {occurrence.overlapSlots} slot
+                                  {occurrence.overlapSlots === 1 ? "" : "s"} (
+                                  {occurrence.overlapMinutes} min)
+                                </p>
+                                <div className="app-recurring-summary-actions">
+                                  <button
+                                    type="button"
+                                    className="app-recurring-summary-button app-recurring-summary-button-primary"
+                                    onClick={() =>
+                                      startManualConflictResolution(occurrence)
+                                    }
+                                    disabled={
+                                      isSavingManualConflictResolution ||
+                                      (manualConflictResolution &&
+                                        getRecurringOccurrenceKey(occurrence) ===
+                                          manualConflictResolution.occurrenceKey)
+                                    }
+                                  >
+                                    {manualConflictResolution &&
+                                    getRecurringOccurrenceKey(occurrence) ===
+                                      manualConflictResolution.occurrenceKey
+                                      ? "Resolving..."
+                                      : "Resolve manually"}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="app-recurring-summary-section-text">
+                            No hard conflicts were found.
+                          </p>
+                        )}
                       </div>
+
+                      {recurringSummary.failedOccurrences.length > 0 && (
+                        <div className="app-recurring-summary-section">
+                          <h4 className="app-recurring-summary-section-title">
+                            Could not be saved (
+                            {recurringSummary.failedOccurrences.length})
+                          </h4>
+                          <div className="app-recurring-summary-list">
+                            {recurringSummary.failedOccurrences.map(
+                              (occurrence) => (
+                                <div
+                                  key={`failed-${occurrence.recurrenceIndex}-${occurrence.label}`}
+                                  className="app-recurring-summary-card app-recurring-summary-card-conflict"
+                                >
+                                  <p className="app-recurring-summary-card-title">
+                                    {occurrence.label}
+                                  </p>
+                                  <p className="app-recurring-summary-card-meta">
+                                    The appointment was not inserted because
+                                    saving it failed.
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <BookingList
-              bookings={dayBookings}
-              onCancelBooking={handleCancelBooking}
-              onStartEditFutureRecurrence={handleStartEditFutureRecurrence}
-              onCancelEditFutureRecurrence={handleCancelEditFutureRecurrence}
-              onApplyEditFutureRecurrence={handleApplyEditFutureRecurrence}
-              onSelectEditFutureRecurrenceUnit={
-                handleSelectEditFutureRecurrenceUnit
-              }
-              onSelectEditFutureRecurrenceValue={
-                handleSelectEditFutureRecurrenceValue
-              }
-              onSelectEditFutureRecurrenceRepeatCount={
-                handleSelectEditFutureRecurrenceRepeatCount
-              }
-              onOpenStopRecurrenceConfirmation={
-                handleOpenStopRecurrenceConfirmation
-              }
-              onCancelStopRecurrence={handleCancelStopRecurrence}
-              onConfirmStopRecurrence={handleStopRecurrence}
-              onStartReschedule={handleStartReschedule}
-              reschedulingBookingKey={reschedulingBookingKey}
-              stoppingRecurrenceBookingKey={stoppingRecurrenceBookingKey}
-              applyingEditFutureRecurrenceBookingKey={
-                applyingEditFutureRecurrenceBookingKey
-              }
-              editFutureRecurrenceState={editFutureRecurrenceState}
-              stopRecurrenceConfirmationBookingKey={
-                stopRecurrenceConfirmationBookingKey
-              }
-              replacementSuggestionData={replacementSuggestionData}
-              onMoveCandidateToFreedSlot={handleMoveCandidateToFreedSlot}
-              onDismissReplacementSuggestions={
-                handleDismissReplacementSuggestions
-              }
-            />
-          </div>
-        </div>
+                <BookingList
+                  bookings={dayBookings}
+                  onCancelBooking={handleCancelBooking}
+                  onStartEditFutureRecurrence={handleStartEditFutureRecurrence}
+                  onCancelEditFutureRecurrence={handleCancelEditFutureRecurrence}
+                  onApplyEditFutureRecurrence={handleApplyEditFutureRecurrence}
+                  onSelectEditFutureRecurrenceUnit={
+                    handleSelectEditFutureRecurrenceUnit
+                  }
+                  onSelectEditFutureRecurrenceValue={
+                    handleSelectEditFutureRecurrenceValue
+                  }
+                  onSelectEditFutureRecurrenceRepeatCount={
+                    handleSelectEditFutureRecurrenceRepeatCount
+                  }
+                  onOpenStopRecurrenceConfirmation={
+                    handleOpenStopRecurrenceConfirmation
+                  }
+                  onCancelStopRecurrence={handleCancelStopRecurrence}
+                  onConfirmStopRecurrence={handleStopRecurrence}
+                  onStartReschedule={handleStartReschedule}
+                  reschedulingBookingKey={reschedulingBookingKey}
+                  stoppingRecurrenceBookingKey={stoppingRecurrenceBookingKey}
+                  applyingEditFutureRecurrenceBookingKey={
+                    applyingEditFutureRecurrenceBookingKey
+                  }
+                  editFutureRecurrenceState={editFutureRecurrenceState}
+                  stopRecurrenceConfirmationBookingKey={
+                    stopRecurrenceConfirmationBookingKey
+                  }
+                  replacementSuggestionData={replacementSuggestionData}
+                  onMoveCandidateToFreedSlot={handleMoveCandidateToFreedSlot}
+                  onDismissReplacementSuggestions={
+                    handleDismissReplacementSuggestions
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
+
+      {activeView === "registry" && <AppointmentRegistry />}
     </div>
   );
 }

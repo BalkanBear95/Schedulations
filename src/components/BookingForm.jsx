@@ -16,7 +16,7 @@ function BookingForm({ onSave, isSaving }) {
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
-  const [reason, setReason] = useState("reason1");
+  const [reason, setReason] = useState(reasonOptions[0]);
   const [anticipation, setAnticipation] = useState(false);
   const [poornessAllergy, setPoornessAllergy] = useState(false);
   const [gender, setGender] = useState("male");
